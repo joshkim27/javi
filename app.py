@@ -679,3 +679,9 @@ def calculate_average(item, start_date, end_date):
             'temp':[int(datetime.now().strftime('%Y')), int(datetime.now().strftime('%m'))],
             'left_days': date_range[1]-int(datetime.now().strftime('%d'))
             }
+
+def run(event, context):
+    
+    response = client.scan(
+        TableName=USERS_TABLE
+    )
