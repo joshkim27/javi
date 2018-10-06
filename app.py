@@ -31,7 +31,7 @@ YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
-IS_OFFLINE = os.environ.get('IS_OFFLINE')
+IS_OFFLINE = True#os.environ.get('IS_OFFLINE')
 
 if IS_OFFLINE:
     client = boto3.client(
@@ -115,19 +115,39 @@ def create_daily():
     uimDailySales = request.form['uimDailySales']
     uimDailyBuying = request.form['uimDailyBuying']
 
-    put_daily(userId, uimDailySales, uimDailyBuying)
+    todayDate = datetime.today()
+
+    put_daily(userId, uimDailySales, uimDailyBuying, todayDate)
 
     # 일입력 체크
     update_dailyInputCheck(userId, True)
 
     # weekly 합산 처리
-    put_weekly(userId, uimDailySales, uimDailyBuying)
+    put_weekly(userId, uimDailySales, uimDailyBuying, todayDate)
 
     # monthly 합산 처리
-    put_monthly(userId, uimDailySales, uimDailyBuying)
+    put_monthly(userId, uimDailySales, uimDailyBuying, todayDate)
 
     # yearly 합산 처리
-    put_yearly(userId, uimDailySales, uimDailyBuying)
+    put_yearly(userId, uimDailySales, uimDailyBuying, todayDate)
+
+    # 해당 블럭 값만 변경이 되는 건지 아니면 전체 변수가 변경되는 건지 확인 필요
+    # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
+    return jsonify({})
+
+@app.route("/test/daily/<string:userId>/<int:uimDailySales>/<int:uimDailyBuying>/<string:testDate>", methods=['GET'])
+def test_create_daily(userId, uimDailySales, uimDailyBuying, testDate):
+    testDateObj = datetime.strptime(testDate, '%Y%m%d')
+    put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
+
+    # weekly 합산 처리
+    put_weekly(userId, uimDailySales, uimDailyBuying, testDateObj)
+
+    # monthly 합산 처리
+    put_monthly(userId, uimDailySales, uimDailyBuying, testDateObj)
+
+    # yearly 합산 처리
+    put_yearly(userId, uimDailySales, uimDailyBuying, testDateObj)
 
     # 해당 블럭 값만 변경이 되는 건지 아니면 전체 변수가 변경되는 건지 확인 필요
     # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
@@ -163,7 +183,15 @@ def update_monthly_cost():
 
     uioOtherCost = request.form['uioOtherCost']
     if not uioOtherCost:
-        uioOtherCost = 'None'
+        uioOtherCost = '0'
+
+    uioOtherCostDueDate = request.form['uioOtherCostDueDate']
+    if not uioOtherCostDueDate:
+        uioOtherCostDueDate = '0'
+
+    uimEmployeePayDate = request.form['uimEmployeePayDate']
+    if not uimEmployeePayDate:
+        uimEmployeePayDate = '0'
 
     this_month = datetime.now().strftime('%Y%m')
 
@@ -177,10 +205,14 @@ def update_monthly_cost():
                          ' #field.uioRentalAmount = :uioRentalAmount, ' +
                          ' #field.uioEmployeeNumber = :uioEmployeeNumber, ' +
                          ' #field.uioEmployeeAmount = :uioEmployeeAmount, ' +
-                         ' #field.uioOtherCost = :uioOtherCost ',
+                         ' #field.uioOtherCost = :uioOtherCost, ' +
+                         ' #field.uioOtherCostDueDate = :uioOtherCostDueDate, ' +
+                         ' #field.uimEmployeePayDate = :uimEmployeePayDate ',
         ExpressionAttributeNames={"#field": this_month},
         ExpressionAttributeValues={':uioRentalPeriod': {'S': uioRentalPeriod},
                                    ':uimRentalPayDate': {'N': uimRentalPayDate},
+                                   ':uioOtherCostDueDate': {'N': uioOtherCostDueDate},
+                                   ':uimEmployeePayDate': {'N': uimEmployeePayDate},
                                    ':uioRentalAmount': {'N': uioRentalAmount},
                                    ':uioEmployeeNumber': {'N': uioEmployeeNumber},
                                    ':uioEmployeeAmount': {'N': uioEmployeeAmount},
@@ -277,6 +309,8 @@ def get_weekly_report(userId):
     uioRentalAmount = values_monthly.get('uioRentalAmount').get('N')
     uioEmployeeNumber = values_monthly.get('uioEmployeeNumber').get('N')
     uioEmployeeAmount = values_monthly.get('uioEmployeeAmount').get('N')
+    uimEmployeePayDate = int(values_monthly.get('uimEmployeePayDate').get('N'))
+    uioOtherCostDueDate = int(values_monthly.get('uioOtherCostDueDate').get('N'))
     uioOtherCost = values_monthly.get('uioOtherCost').get('N')
 
     # 렌탈 입력일에 따라 구분 buying 합산 안함 날짜 상관없음
@@ -292,7 +326,8 @@ def get_weekly_report(userId):
     temp = daily_average(userId)
     cvExpectedProfit = str(int(cvMonthlyProfit) + (temp['avg_profit'] * temp['left_days']))
     cvExpectedNetProfit = str(int(cvExpectedProfit) - int(cvMonthlyCost))
-    cvPaymentDate = cal_payment_date(uimRentalPayDate)
+    #cvPaymentDate = cal_payment_date(uimRentalPayDate)
+    cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
 
     return jsonify({
         "set_attributes":{
@@ -382,8 +417,8 @@ def get_user(userId):
 
     return jsonify(item)
 
-def put_daily(userId, uimDailySales, uimDailyBuying ):
-    today = datetime.now().strftime('%Y%m%d')
+def put_daily(userId, uimDailySales, uimDailyBuying, todayDate ):
+    today = todayDate.strftime('%Y%m%d')
     resp = client.get_item(
         TableName=DAILY_TABLE,
         Key={
@@ -417,8 +452,8 @@ def put_daily(userId, uimDailySales, uimDailyBuying ):
         )
 
 
-def put_weekly(userId, uimDailySales, uimDailyBuying):
-    this_week = datetime.now().strftime('%Y%W')
+def put_weekly(userId, uimDailySales, uimDailyBuying, todayDate):
+    this_week = todayDate.strftime('%Y%W')
 
     resp = client.get_item(
         TableName=WEEKLY_TABLE,
@@ -456,8 +491,8 @@ def put_weekly(userId, uimDailySales, uimDailyBuying):
         )
 
 
-def put_monthly(userId, uimDailySales, uimDailyBuying):
-    this_month = datetime.now().strftime('%Y%m')
+def put_monthly(userId, uimDailySales, uimDailyBuying, todayDate):
+    this_month = todayDate.strftime('%Y%m')
 
     resp = client.get_item(
         TableName=MONTHLY_TABLE,
@@ -495,8 +530,8 @@ def put_monthly(userId, uimDailySales, uimDailyBuying):
         )
 
 
-def put_yearly(userId, uimDailySales, uimDailyBuying):
-    this_year = datetime.now().strftime('%Y')
+def put_yearly(userId, uimDailySales, uimDailyBuying, todayDate):
+    this_year = todayDate.strftime('%Y')
 
     resp = client.get_item(
         TableName=MONTHLY_TABLE,
@@ -551,6 +586,23 @@ def cal_payment_date(input_date):
         return (date.today() + relativedelta(months=+1)).replace(day=input_date).strftime('%d %b')
     else:
         return date.today().replace(day=input_date).strftime('%d %b')
+
+def cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate):
+    date_list = [uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate]
+    date_list.sort()
+
+    today_date = date.today()
+
+    for payment_date in date_list:
+        temp = date.today().replace(day=payment_date)
+        if temp > today_date:
+            return temp.strftime('%d %b')
+
+    return (date.today().replace(day=date_list[0]) + relativedelta(months=+1)).strftime('%d %b')
+
+@app.route("/test/cal_next_payment_date/<int:uimRentalPayDate>/<int:uimEmployeePayDate>/<int:uioOtherCostDueDate>")
+def test_cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate):
+    return cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
 
 @app.route("/user/delete/<string:userId>")
 def delete_user(userId):
