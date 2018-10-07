@@ -31,7 +31,7 @@ YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
-IS_OFFLINE = True#os.environ.get('IS_OFFLINE')
+IS_OFFLINE = os.environ.get('IS_OFFLINE')
 
 if IS_OFFLINE:
     client = boto3.client(
@@ -83,6 +83,13 @@ def create_user():
     ref = request.form['ref']
     if not ref:
         ref = 'None'
+    longitude = request.form['longitude']
+    if not longitude:
+        longitude = 'None'
+    latitude = request.form['latitude']
+    if not latitude:
+        latitude = 'None'
+
 
     client.put_item(
         TableName=USERS_TABLE,
@@ -97,6 +104,8 @@ def create_user():
             'locale': {'S': locale},
             'timezone': {'S': timezone},
             'ref': {'S': ref},
+            'longitude': {'S': longitude},
+            'latitude': {'S': latitude},
             'registration_date':{'S':datetime.utcnow().isoformat()},
             'dailyInputCheck':{'BOOL':False}
         }
@@ -135,7 +144,7 @@ def create_daily():
     # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
     return jsonify({})
 
-@app.route("/test/daily/<string:userId>/<int:uimDailySales>/<int:uimDailyBuying>/<string:testDate>", methods=['GET'])
+@app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>", methods=['GET'])
 def test_create_daily(userId, uimDailySales, uimDailyBuying, testDate):
     testDateObj = datetime.strptime(testDate, '%Y%m%d')
     put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
@@ -737,3 +746,48 @@ def run(event, context):
     response = client.scan(
         TableName=USERS_TABLE
     )
+
+@app.route("/weather/<string:userId>")
+def get_weather(userId):
+    # user의 위도 경도 호출
+    # resp = client.get_item(
+    #     TableName=DAILY_TABLE,
+    #     Key={
+    #         'userId': { 'S': userId }
+    #     }
+    # )
+
+    # item = resp.get('Item')
+    # if not item:
+    #     return jsonify({'error': 'User does not exist'}), 404
+
+    # longitude = item.get('longitude').get('S')
+    # latitude = item.get('latitude').get('S')
+    longitude = '28.451850'
+    latitude = '77.08684'
+
+    # yahoo api 호출
+
+    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
+ 
+    try:
+        response = requests.get(yql, verify=True)
+    except HTTPError as e:
+        logger.error("Request failed: %d %s", e.code, e.reason)
+    except URLError as e:
+        logger.error("Server connection failed: %s", e.reason)
+
+    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
+    forecast = response.json()['query']['results']['channel']['item']['forecast']
+    forecast_dict = {
+        "weatherDay1": forecast[0]['date'],
+        "weatherDay1High": forecast[0]['high'],
+        "weatherDay1Low": forecast[0]['low'],
+        "weatherDay1Text": forecast[0]['text'],
+        "weatherDay2": forecast[1]['date'],
+        "weatherDay2High": forecast[1]['high'],
+        "weatherDay2Low": forecast[1]['low'],
+        "weatherDay2Text": forecast[1]['text']
+    }
+    return send_message(userId,'WeatherReport', forecast_dict)
+    
