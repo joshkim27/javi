@@ -100,22 +100,23 @@ def create_daily():
 
     todayDate = datetime.today()
 
-    put_daily(userId, uimDailySales, uimDailyBuying, todayDate)
+    isExist = put_daily(userId, uimDailySales, uimDailyBuying, todayDate)
 
     # 일입력 체크
     update_dailyInputCheck(userId, True)
 
-    # weekly 합산 처리
-    put_weekly(userId, uimDailySales, uimDailyBuying, todayDate)
+    # daily 없는 경우만 합산처리 하는 걸로
+    # daily 가 누적으로 바뀌는 경우 체크 없애야 함
+    if not isExist :
+        # weekly 합산 처리
+        put_weekly(userId, uimDailySales, uimDailyBuying, todayDate)
 
-    # monthly 합산 처리
-    put_monthly(userId, uimDailySales, uimDailyBuying, todayDate)
+        # monthly 합산 처리
+        put_monthly(userId, uimDailySales, uimDailyBuying, todayDate)
 
-    # yearly 합산 처리
-    put_yearly(userId, uimDailySales, uimDailyBuying, todayDate)
+        # yearly 합산 처리
+        put_yearly(userId, uimDailySales, uimDailyBuying, todayDate)
 
-    # 해당 블럭 값만 변경이 되는 건지 아니면 전체 변수가 변경되는 건지 확인 필요
-    # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
     return jsonify({})
 
 
@@ -321,50 +322,50 @@ def delete_user(userId):
     return jsonify(res)
 
 
-@app.route("/daily/delete/<string:userId>")
-def delete_daily(userId):
+@app.route("/daily/delete/<string:userDailyId>")
+def delete_daily(userDailyId):
     res = client.delete_item(
         TableName=DAILY_TABLE,
         Key={
-            'userId': {'S': userId}
+            'userDailyId': {'S': userDailyId}
         }
     )
     return jsonify(res)
 
 
-@app.route("/weekly/delete/<string:userId>")
-def delete_weekly(userId):
+@app.route("/weekly/delete/<string:userWeeklyId>")
+def delete_weekly(userWeeklyId):
     res = client.delete_item(
         TableName=WEEKLY_TABLE,
         Key={
-            'userId': {'S': userId}
+            'userWeeklyId': {'S': userWeeklyId}
         }
     )
     return jsonify(res)
 
 
-@app.route("/monthly/delete/<string:userId>")
-def delete_monthly(userId):
+@app.route("/monthly/delete/<string:userMonthlyId>")
+def delete_monthly(userMonthlyId):
     res = client.delete_item(
         TableName=MONTHLY_TABLE,
         Key={
-            'userId': {'S': userId}
+            'userMonthlyId': {'S': userMonthlyId}
         }
     )
     return jsonify(res)
 
 
-@app.route("/yearly/delete/<string:userId>")
-def delete_yealy(userId):
+@app.route("/yearly/delete/<string:userYearlyId>")
+def delete_yealy(userYearlyId):
     res = client.delete_item(
         TableName=YEARLY_TABLE,
         Key={
-            'userId': {'S': userId}
+            'userYearlyId': {'S': userYearlyId}
         }
     )
     return jsonify(res)
 
-######### Utility functions
+######### Utility functions ##############
 
 
 def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
@@ -450,6 +451,19 @@ def put_daily(userId, uimDailySales, uimDailyBuying, todayDate):
     today = todayDate.strftime('%Y%m%d')
     userDailyId = userId + today
 
+    isExist = False
+
+    resp = client.get_item(
+        TableName=DAILY_TABLE,
+        Key={
+            'userDailyId': {'S': userDailyId}
+        }
+    )
+
+    item = resp.get('Item')
+    if item:
+        isExist = True
+
     client.put_item(
         TableName=DAILY_TABLE,
         Item={
@@ -459,6 +473,8 @@ def put_daily(userId, uimDailySales, uimDailyBuying, todayDate):
             'created_at': {'S': datetime.utcnow().isoformat()}
         }
     )
+
+    return isExist
 
 
 def put_weekly(userId, uimDailySales, uimDailyBuying, todayDate):
@@ -633,16 +649,17 @@ def calculate_average(item, start_date, end_date):
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>", methods=['GET'])
 def test_create_daily(userId, uimDailySales, uimDailyBuying, testDate):
     testDateObj = datetime.strptime(testDate, '%Y%m%d')
-    put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
+    isExist = put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
 
-    # weekly 합산 처리
-    put_weekly(userId, uimDailySales, uimDailyBuying, testDateObj)
+    if not isExist :
+        # weekly 합산 처리
+        put_weekly(userId, uimDailySales, uimDailyBuying, testDateObj)
 
-    # monthly 합산 처리
-    put_monthly(userId, uimDailySales, uimDailyBuying, testDateObj)
+        # monthly 합산 처리
+        put_monthly(userId, uimDailySales, uimDailyBuying, testDateObj)
 
-    # yearly 합산 처리
-    put_yearly(userId, uimDailySales, uimDailyBuying, testDateObj)
+        # yearly 합산 처리
+        put_yearly(userId, uimDailySales, uimDailyBuying, testDateObj)
 
     # 해당 블럭 값만 변경이 되는 건지 아니면 전체 변수가 변경되는 건지 확인 필요
     # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
