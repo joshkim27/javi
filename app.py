@@ -90,7 +90,7 @@ def create_user():
     if not latitude:
         latitude = 'None'
 
-    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref)
+    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude)
 
     return jsonify({"text": "Welcome to the Javi Rockets!"})
 
@@ -126,7 +126,7 @@ def create_daily():
     return jsonify({})
 
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>", methods=['GET'])
-def test_create_daily(userId, uimDailySales, uimDailyBuying, testDate):
+def test_create_daily_temp(userId, uimDailySales, uimDailyBuying, testDate):
     testDateObj = datetime.strptime(testDate, '%Y%m%d')
     put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
 
@@ -423,6 +423,8 @@ def send_message(userId, blockName, contents):
 
     if isinstance(contents, dict):
         for i in contents.keys():
+            logger.debug(contents)
+            logger.debug(contents[i])
             contents_string = '&' + contents_string + i + '=' + contents[i]
     else:
         return jsonify({'message': 'contents are not defined'}), 500
@@ -450,7 +452,7 @@ def send_message(userId, blockName, contents):
 
 
 
-def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref):
+def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude):
 
     client.put_item(
         TableName=USERS_TABLE,
@@ -464,6 +466,8 @@ def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, pr
             'profile_pic_url': {'S': profile_pic_url},
             'locale': {'S': locale},
             'timezone': {'S': timezone},
+            'longitude': {'S': longitude},
+            'latitude': {'S': latitude},
             'ref': {'S': ref},
             'registration_date': {'S': datetime.utcnow().isoformat()},
             'dailyInputCheck': {'BOOL': False}
@@ -761,14 +765,16 @@ def get_weather(userId):
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
     forecast_dict = {
-        "weatherDay1": forecast[0]['date'],
-        "weatherDay1High": forecast[0]['high'],
-        "weatherDay1Low": forecast[0]['low'],
-        "weatherDay1Text": forecast[0]['text'],
-        "weatherDay2": forecast[1]['date'],
-        "weatherDay2High": forecast[1]['high'],
-        "weatherDay2Low": forecast[1]['low'],
-        "weatherDay2Text": forecast[1]['text']
+        "set_attributes": {
+            "weatherDay1": forecast[0]['date'],
+            "weatherDay1High": forecast[0]['high'],
+            "weatherDay1Low": forecast[0]['low'],
+            "weatherDay1Text": forecast[0]['text'],
+            "weatherDay2": forecast[1]['date'],
+            "weatherDay2High": forecast[1]['high'],
+            "weatherDay2Low": forecast[1]['low'],
+            "weatherDay2Text": forecast[1]['text']
+        }
     }
-    return send_message(userId,'WeatherReport', forecast_dict)
+    return jsonify(forecast_dict)
     
