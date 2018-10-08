@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, date
 from flask import Flask, jsonify, request
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
+from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -113,7 +114,7 @@ def create_daily():
 
     # daily 없는 경우만 합산처리 하는 걸로
     # daily 가 누적으로 바뀌는 경우 체크 없애야 함
-    if not isExist :
+    if not isExist:
         # weekly 합산 처리
         put_weekly(userId, uimDailySales, uimDailyBuying, todayDate)
 
@@ -124,25 +125,6 @@ def create_daily():
         put_yearly(userId, uimDailySales, uimDailyBuying, todayDate)
 
     return jsonify({})
-
-@app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>", methods=['GET'])
-def test_create_daily_temp(userId, uimDailySales, uimDailyBuying, testDate):
-    testDateObj = datetime.strptime(testDate, '%Y%m%d')
-    put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
-
-    # weekly 합산 처리
-    put_weekly(userId, uimDailySales, uimDailyBuying, testDateObj)
-
-    # monthly 합산 처리
-    put_monthly(userId, uimDailySales, uimDailyBuying, testDateObj)
-
-    # yearly 합산 처리
-    put_yearly(userId, uimDailySales, uimDailyBuying, testDateObj)
-
-    # 해당 블럭 값만 변경이 되는 건지 아니면 전체 변수가 변경되는 건지 확인 필요
-    # 리포트 호출할 때 JSON API 호출하는 형태가 나을까??
-    return jsonify({})
-
 
 @app.route("/monthly/cost", methods=['POST'])
 def update_monthly_cost():
@@ -184,10 +166,11 @@ def update_monthly_cost():
 
     this_month = datetime.now().strftime('%Y%m')
 
-    update_monthly_cost(userId+this_month, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+    update_monthly_cost(userId + this_month, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
                         uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost)
 
     return jsonify({})
+
 
 # 리포트 호출 시점의 값 조회 방
 @app.route("/daily/today/<string:userId>")
@@ -198,7 +181,7 @@ def get_daily_report(userId):
     resp = client.get_item(
         TableName=DAILY_TABLE,
         Key={
-            'userDailyId': {'S': userId+today}
+            'userDailyId': {'S': userId + today}
         }
     )
 
@@ -228,7 +211,7 @@ def get_weekly_report(userId):
     resp_weekly = client.get_item(
         TableName=WEEKLY_TABLE,
         Key={
-            'userWeeklyId': {'S': userId+this_week}
+            'userWeeklyId': {'S': userId + this_week}
         }
     )
 
@@ -251,7 +234,7 @@ def get_weekly_report(userId):
     resp_monthly = client.get_item(
         TableName=MONTHLY_TABLE,
         Key={
-            'userMonthlyId': {'S': userId+this_month}
+            'userMonthlyId': {'S': userId + this_month}
         }
     )
 
@@ -389,6 +372,7 @@ def delete_yealy(userYearlyId):
     )
     return jsonify(res)
 
+
 ######### Utility functions ##############
 
 
@@ -400,17 +384,18 @@ def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOth
             'userMonthlyId': {'S': userMonthlyId}
         },
         AttributeUpdates={
-            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod},'Action': 'PUT'},
-            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate},'Action': 'PUT'},
-            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate},'Action': 'PUT'},
-            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate},'Action': 'PUT'},
-            'uioRentalAmount': {'Value': {'N': uioRentalAmount},'Action': 'PUT'},
-            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber},'Action': 'PUT'},
-            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount},'Action': 'PUT'},
-            'uioOtherCost': {'Value': {'N': uioOtherCost},'Action': 'PUT'}
+            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod}, 'Action': 'PUT'},
+            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate}, 'Action': 'PUT'},
+            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate}, 'Action': 'PUT'},
+            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate}, 'Action': 'PUT'},
+            'uioRentalAmount': {'Value': {'N': uioRentalAmount}, 'Action': 'PUT'},
+            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber}, 'Action': 'PUT'},
+            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount}, 'Action': 'PUT'},
+            'uioOtherCost': {'Value': {'N': uioOtherCost}, 'Action': 'PUT'}
 
         }
     )
+
 
 def send_message(userId, blockName, contents):
     logger.debug('send_message')
@@ -451,9 +436,7 @@ def send_message(userId, blockName, contents):
     return jsonify({'action': 'Successfully sent'})
 
 
-
 def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude):
-
     client.put_item(
         TableName=USERS_TABLE,
         Item={
@@ -620,13 +603,16 @@ def cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueD
 def daily_average(userId):
     today = datetime.now().strftime('%Y%m%d')
     this_month = datetime.now().strftime('%Y%m')
-    resp = client.get_item(
+    resp = client.scan(
         TableName=DAILY_TABLE,
-        Key={
-            'userId': {'S': userId}
+        ScanFilter={
+            "userDailyId":{
+                "AttributeValueList":[ {"S":userId+this_month} ],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
         }
     )
-    item = resp.get('Item')
+    item = resp.get('Items')
     if not item:
         return jsonify({'message': 'No data of this month'})
     else:
@@ -636,6 +622,34 @@ def daily_average(userId):
 
 
 def calculate_average(item, start_date, end_date):
+    input_count = 0
+    sum_sales = 0
+    sum_buying = 0
+
+    logger.debug('===================calculate_average=========================')
+    logger.debug('start_date [%s]  ::: end_date  [%s]', start_date, end_date)
+    logger.debug(item)
+
+    for i in item:
+        input_count = input_count + 1
+        sum_sales = sum_sales + int(i.get('uimDailySales').get('N'))
+        sum_buying = sum_buying + int(i.get('uimDailyBuying').get('N'))
+
+    date_range = monthrange(int(datetime.now().strftime('%Y')), int(datetime.now().strftime('%m')))
+    # tdelta = datetime.strptime(end_date, '%Y%m%d') - datetime.strptime(end_date, '%Y%m%d')
+    return {'input_count': input_count,
+            'sum_sales': sum_sales,
+            'sum_buying': sum_buying,
+            'avg_sales': int(sum_sales / input_count),
+            'avg_buying': int(sum_buying / input_count),
+            'avg_profit': int(sum_sales / input_count) - int(sum_buying / input_count),
+            'date_range': date_range,
+            'temp': [int(datetime.now().strftime('%Y')), int(datetime.now().strftime('%m'))],
+            'left_days': date_range[1] - int(datetime.now().strftime('%d'))
+            }
+
+
+def calculate_average_back(item, start_date, end_date):
     input_count = 0
     date_count = 0
     sum_sales = 0
@@ -670,16 +684,16 @@ def calculate_average(item, start_date, end_date):
             'left_days': date_range[1] - int(datetime.now().strftime('%d'))
             }
 
-
 ################# test source start ##########################
 
 
-@app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>", methods=['GET'])
+@app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>",
+           methods=['GET'])
 def test_create_daily(userId, uimDailySales, uimDailyBuying, testDate):
     testDateObj = datetime.strptime(testDate, '%Y%m%d')
     isExist = put_daily(userId, uimDailySales, uimDailyBuying, testDateObj)
 
-    if not isExist :
+    if not isExist:
         # weekly 합산 처리
         put_weekly(userId, uimDailySales, uimDailyBuying, testDateObj)
 
@@ -706,22 +720,27 @@ def test_daily_put(userId):
 
 
 @app.route("/test/average/<string:userId>")
-def test_daily_average(userId):
+def test_average(userId):
     today = datetime.now().strftime('%Y%m%d')
     this_month = datetime.now().strftime('%Y%m')
-    resp = client.get_item(
+    resp = client.scan(
         TableName=DAILY_TABLE,
-        Key={
-            'userId': {'S': userId}
+        ScanFilter={
+            "userDailyId":{
+                "AttributeValueList":[ {"S":userId+this_month} ],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
         }
     )
-    item = resp.get('Item')
+    logger.debug(resp)
+    item = resp.get('Items')
+    logger.debug(item)
     if not item:
         return jsonify({'message': 'No data of this month'})
     else:
         start_date = this_month + '01'
 
-    return jsonify(calculate_average(item, start_date, today))
+    return jsonify(calculate_average(item, start_date,today))
 
 
 ################# test source ################################
@@ -731,6 +750,7 @@ def run(event, context):
     response = client.scan(
         TableName=USERS_TABLE
     )
+
 
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
@@ -754,7 +774,7 @@ def get_weather(userId):
     # yahoo api 호출
 
     yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
- 
+
     try:
         response = requests.get(yql, verify=True)
     except HTTPError as e:
@@ -777,4 +797,3 @@ def get_weather(userId):
         }
     }
     return jsonify(forecast_dict)
-    
