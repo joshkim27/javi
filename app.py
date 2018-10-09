@@ -772,8 +772,7 @@ def get_weather(userId):
     latitude = '77.08684'
 
     # yahoo api 호출
-
-    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
+    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
 
     try:
         response = requests.get(yql, verify=True)
