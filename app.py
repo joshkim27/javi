@@ -267,6 +267,10 @@ def get_weekly_report(userId):
     # cvPaymentDate = cal_payment_date(uimRentalPayDate)
     cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
 
+    # date 뒤에 postfix 추가
+    postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+    cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
+
     return jsonify({
         "set_attributes": {
             "cvWeeklySales": cvWeeklySales,
