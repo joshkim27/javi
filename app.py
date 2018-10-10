@@ -747,15 +747,32 @@ def test_average(userId):
     return jsonify(calculate_average(item, start_date,today))
 
 
-################# test source ################################
-
-
-def run(event, context):
-    response = client.scan(
+# dailiyInputCheck 매일 자정에 초기화
+def resetDailyInputCheck(event, context):
+    scan_response = client.scan(
         TableName=USERS_TABLE
     )
+    for i in scan_response['Items']:
+        print(i['userId']['S'])
+        update_response = client.update_item(
+            TableName=USERS_TABLE,
+            Key={
+                'userId': {'S': i['userId']['S']}
+            },
+            AttributeUpdates={
+                'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
+            }
+        )
 
 
+def weatherBroadcasting(event, context):
+    scan_response = client.scan(
+        TableName=USERS_TABLE
+    )
+    for i in scan_response['Items']:
+        send_message(i['userId']['S'], 'WeatherReport', {})
+
+################# test source ################################
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
     # user의 위도 경도 호출
