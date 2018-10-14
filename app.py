@@ -411,7 +411,7 @@ def add_postfix_date(date):
     this_month = datetime.today().strftime('%b')
     postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
 
-    ret_date = str(date) + postfix_date.get(date, 'th') + ' ' +  this_month
+    ret_date = str(date) + postfix_date.get(date, 'th') + ' ' + this_month + '.'
 
     return ret_date
 
