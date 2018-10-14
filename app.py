@@ -813,7 +813,11 @@ def get_weather(userId):
             "weatherDay2": forecast[1]['date'],
             "weatherDay2High": forecast[1]['high'],
             "weatherDay2Low": forecast[1]['low'],
-            "weatherDay2Text": forecast[1]['text']
+            "weatherDay2Text": forecast[1]['text'],
+            "weatherDay3": forecast[1]['date'],
+            "weatherDay3High": forecast[1]['high'],
+            "weatherDay3Low": forecast[1]['low'],
+            "weatherDay3Text": forecast[1]['text']
         }
     }
     return jsonify(forecast_dict)
