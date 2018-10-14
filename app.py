@@ -127,7 +127,7 @@ def create_daily():
     return jsonify({})
 
 @app.route("/monthly/cost", methods=['POST'])
-def update_monthly_cost():
+def put_monthly_cost():
     userId = request.form['messenger user id']
     if not userId:
         return jsonify({'error': 'Please provider userId'}), 400
@@ -321,6 +321,34 @@ def get_user(userId):
 
     return jsonify(item)
 
+@app.route("/cost/<string:userId>")
+def get_cost(userId):
+    logger.debug('Call get_cost')
+    this_month = datetime.now().strftime('%Y%m')
+
+    resp_monthly = client.get_item(
+        TableName=MONTHLY_TABLE,
+        Key={
+            'userMonthlyId': {'S': userId + this_month}
+        }
+    )
+
+    item = resp_monthly.get('Item')
+    if not item:
+        return jsonify({'error': 'User does not exist'}), 404
+
+    uimRentalPayDate = int(item.get('uimRentalPayDate').get('N'))
+    uimEmployeePayDate = int(item.get('uimEmployeePayDate').get('N'))
+    uioOtherCostDueDate = int(item.get('uioOtherCostDueDate').get('N'))
+
+    return jsonify({
+        "set_attributes": {
+            "cvRentalPayDate": add_postfix_date(uimRentalPayDate),
+            "cvEmployeePayDate": add_postfix_date(uimEmployeePayDate),
+            "cvOtherCostDueDate": add_postfix_date(uioOtherCostDueDate)
+        }
+    })
+
 
 @app.route("/user/delete/<string:userId>")
 def delete_user(userId):
@@ -378,6 +406,14 @@ def delete_yealy(userYearlyId):
 
 
 ######### Utility functions ##############
+
+def add_postfix_date(date):
+    this_month = datetime.today().strftime('%b')
+    postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
+
+    ret_date = str(date) + postfix_date.get(date, 'th') + ' ' +  this_month
+
+    return ret_date
 
 
 def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
@@ -746,6 +782,12 @@ def test_average(userId):
 
     return jsonify(calculate_average(item, start_date,today))
 
+@app.route("/test/cost/<string:userMonthlyId>/<string:uimRentalPayDate>/<string:uioOtherCostDueDate>/<string:uimEmployeePayDate>")
+def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate):
+    update_monthly_cost(userMonthlyId, 'once a month', uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+                        '10000', '1', '10000', '10000')
+
+    return jsonify({})
 
 # dailiyInputCheck 매일 자정에 초기화
 def resetDailyInputCheck(event, context):
