@@ -812,7 +812,9 @@ def weatherBroadcasting(event, context):
         TableName=USERS_TABLE
     )
     for i in scan_response['Items']:
+        logger.debug(i['userId']['S'])
         send_message(i['userId']['S'], 'WeatherReport', {})
+    return jsonify()
 
 ################# test source ################################
 @app.route("/weather/<string:userId>")
@@ -856,10 +858,10 @@ def get_weather(userId):
             "weatherDay2High": forecast[1]['high'],
             "weatherDay2Low": forecast[1]['low'],
             "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[1]['date'],
-            "weatherDay3High": forecast[1]['high'],
-            "weatherDay3Low": forecast[1]['low'],
-            "weatherDay3Text": forecast[1]['text']
+            "weatherDay3": forecast[2]['date'],
+            "weatherDay3High": forecast[2]['high'],
+            "weatherDay3Low": forecast[2]['low'],
+            "weatherDay3Text": forecast[2]['text']
         }
     }
     return jsonify(forecast_dict)
