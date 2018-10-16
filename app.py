@@ -187,18 +187,13 @@ def get_daily_report(userId):
 
     item = resp.get('Item')
     if not item:
-        return jsonify({
-            "set_attributes": {
-                "uimDailySales": '0',
-                "uimDailyBuying": '0',
-                "cvDailyProfit": '0',
-                "cvToday": cvToday
-            },
-        })
-
-    uimDailySales = item.get('uimDailySales').get('N')
-    uimDailyBuying = item.get('uimDailyBuying').get('N')
-    cvDailyProfit = str(int(uimDailySales) - int(uimDailyBuying))
+        uimDailySales = '0'
+        uimDailyBuying = '0'
+        cvDailyProfit = '0'
+    else:
+        uimDailySales = item.get('uimDailySales').get('N')
+        uimDailyBuying = item.get('uimDailyBuying').get('N')
+        cvDailyProfit = str(int(uimDailySales) - int(uimDailyBuying))
 
     return jsonify({
         "set_attributes": {
@@ -839,9 +834,7 @@ def weatherBroadcasting(event, context):
         TableName=USERS_TABLE
     )
     for i in scan_response['Items']:
-        logger.debug(i['userId']['S'])
         send_message(i['userId']['S'], 'WeatherReport', {})
-    return jsonify()
 
 ################# test source ################################
 @app.route("/weather/<string:userId>")
@@ -885,10 +878,10 @@ def get_weather(userId):
             "weatherDay2High": forecast[1]['high'],
             "weatherDay2Low": forecast[1]['low'],
             "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[2]['date'],
-            "weatherDay3High": forecast[2]['high'],
-            "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text']
+            "weatherDay3": forecast[1]['date'],
+            "weatherDay3High": forecast[1]['high'],
+            "weatherDay3Low": forecast[1]['low'],
+            "weatherDay3Text": forecast[1]['text']
         }
     }
     return jsonify(forecast_dict)
