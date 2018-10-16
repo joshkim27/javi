@@ -187,7 +187,14 @@ def get_daily_report(userId):
 
     item = resp.get('Item')
     if not item:
-        return jsonify({'error': 'User does not exist'}), 404
+        return jsonify({
+            "set_attributes": {
+                "uimDailySales": '0',
+                "uimDailyBuying": '0',
+                "cvDailyProfit": '0',
+                "cvToday": cvToday
+            },
+        })
 
     uimDailySales = item.get('uimDailySales').get('N')
     uimDailyBuying = item.get('uimDailyBuying').get('N')
@@ -217,12 +224,16 @@ def get_weekly_report(userId):
 
     item_weekly = resp_weekly.get('Item')
     if not item_weekly:
-        return jsonify({'error': 'This week data does not exist'}), 404
+        cvWeeklySales = '0'
+        cvWeeklyBuying = '0'
+        cvWeeklyProfit = '0'
+    else:
+        cvWeeklySales = item_weekly.get('cvWeeklySales').get('N')
+        cvWeeklyBuying = item_weekly.get('cvWeeklyBuying').get('N')
+        cvWeeklyProfit = str(int(cvWeeklySales) - int(cvWeeklyBuying))
 
     # 데이터 없는 경우 처리 필요
-    cvWeeklySales = item_weekly.get('cvWeeklySales').get('N')
-    cvWeeklyBuying = item_weekly.get('cvWeeklyBuying').get('N')
-    cvWeeklyProfit = str(int(cvWeeklySales) - int(cvWeeklyBuying))
+
 
     # month period 처리
     this_month = datetime.now().strftime('%Y%m')
@@ -240,36 +251,52 @@ def get_weekly_report(userId):
 
     item_monthly = resp_monthly.get('Item')
     if not item_monthly:
-        return jsonify({'error': 'This month data does not exist'}), 404
+        cvMonthlySales = '0'
+        cvMonthlyBuying = '0'
+        cvMonthlyProfit = '0'
 
-    cvMonthlySales = item_monthly.get('cvMonthlySales').get('N')
-    cvMonthlyBuying = item_monthly.get('cvMonthlyBuying').get('N')
-    cvMonthlyProfit = str(int(cvMonthlySales) - int(cvMonthlyBuying))
+        uioRentalPeriod = 'None'
+        uimRentalPayDate = 0
+        uioRentalAmount = '0'
+        uioEmployeeNumber = '0'
+        uioEmployeeAmount = '0'
+        uimEmployeePayDate = 0
+        uioOtherCostDueDate = 0
+        uioOtherCost = '0'
+        cvMonthlyCost = '0'
+        cvMonthlyNetProfit = '0'
+        cvExpectedProfit = '0'
+        cvExpectedNetProfit = '0'
+        cvPaymentDate = 'None'
+    else:
+        cvMonthlySales = item_monthly.get('cvMonthlySales').get('N')
+        cvMonthlyBuying = item_monthly.get('cvMonthlyBuying').get('N')
+        cvMonthlyProfit = str(int(cvMonthlySales) - int(cvMonthlyBuying))
 
-    uioRentalPeriod = item_monthly.get('uioRentalPeriod').get('S')
-    uimRentalPayDate = int(item_monthly.get('uimRentalPayDate').get('N'))
-    uioRentalAmount = item_monthly.get('uioRentalAmount').get('N')
-    uioEmployeeNumber = item_monthly.get('uioEmployeeNumber').get('N')
-    uioEmployeeAmount = item_monthly.get('uioEmployeeAmount').get('N')
-    uimEmployeePayDate = int(item_monthly.get('uimEmployeePayDate').get('N'))
-    uioOtherCostDueDate = int(item_monthly.get('uioOtherCostDueDate').get('N'))
-    uioOtherCost = item_monthly.get('uioOtherCost').get('N')
+        uioRentalPeriod = item_monthly.get('uioRentalPeriod').get('S')
+        uimRentalPayDate = int(item_monthly.get('uimRentalPayDate').get('N'))
+        uioRentalAmount = item_monthly.get('uioRentalAmount').get('N')
+        uioEmployeeNumber = item_monthly.get('uioEmployeeNumber').get('N')
+        uioEmployeeAmount = item_monthly.get('uioEmployeeAmount').get('N')
+        uimEmployeePayDate = int(item_monthly.get('uimEmployeePayDate').get('N'))
+        uioOtherCostDueDate = int(item_monthly.get('uioOtherCostDueDate').get('N'))
+        uioOtherCost = item_monthly.get('uioOtherCost').get('N')
 
-    # 렌탈 입력일에 따라 구분 buying 합산 안함 날짜 상관없음
-    cvMonthlyCost = str(int(uioEmployeeAmount) + int(uioRentalAmount) + int(uioOtherCost))
+        # 렌탈 입력일에 따라 구분 buying 합산 안함 날짜 상관없음
+        cvMonthlyCost = str(int(uioEmployeeAmount) + int(uioRentalAmount) + int(uioOtherCost))
 
-    cvMonthlyNetProfit = str(int(cvMonthlySales) - int(cvMonthlyCost) - int(cvMonthlyBuying))
+        cvMonthlyNetProfit = str(int(cvMonthlySales) - int(cvMonthlyCost) - int(cvMonthlyBuying))
 
-    # 일 입력 치 평균으로 계산 분모는 입력 날짜
-    temp = daily_average(userId)
-    cvExpectedProfit = str(int(cvMonthlyProfit) + (temp['avg_profit'] * temp['left_days']))
-    cvExpectedNetProfit = str(int(cvExpectedProfit) - int(cvMonthlyCost))
-    # cvPaymentDate = cal_payment_date(uimRentalPayDate)
-    cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
+        # 일 입력 치 평균으로 계산 분모는 입력 날짜
+        temp = daily_average(userId)
+        cvExpectedProfit = str(int(cvMonthlyProfit) + (temp['avg_profit'] * temp['left_days']))
+        cvExpectedNetProfit = str(int(cvExpectedProfit) - int(cvMonthlyCost))
 
-    # date 뒤에 postfix 추가
-    postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
-    cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
+        # cvPaymentDate = cal_payment_date(uimRentalPayDate)
+        cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
+        # date 뒤에 postfix 추가
+        postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+        cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
 
     return jsonify({
         "set_attributes": {
