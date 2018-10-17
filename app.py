@@ -14,7 +14,7 @@ from calendar import monthrange
 from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
 
@@ -831,14 +831,6 @@ def resetDailyInputCheck(event, context):
         )
 
 
-def weatherBroadcasting(event, context):
-    scan_response = client.scan(
-        TableName=USERS_TABLE
-    )
-    for i in scan_response['Items']:
-        send_message(i['userId']['S'], 'WeatherReport', {})
-
-################# test source ################################
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
     # user의 위도 경도 호출
