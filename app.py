@@ -105,6 +105,8 @@ def create_daily():
     uimDailySales = request.form['uimDailySales']
     uimDailyBuying = request.form['uimDailyBuying']
 
+    logger.info('daily_input|'+userId+'|'+uimDailySales+'|'+uimDailyBuying)
+
     todayDate = datetime.today()
 
     isExist = put_daily(userId, uimDailySales, uimDailyBuying, todayDate)
