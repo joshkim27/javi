@@ -864,18 +864,21 @@ def get_weather(userId):
     forecast = response.json()['query']['results']['channel']['item']['forecast']
     forecast_dict = {
         "set_attributes": {
-            "weatherDay1": forecast[0]['date'],
+            "weatherDay1": forecast[0]['day'],
+            "weatherDate1": forecast[0]['date'],
             "weatherDay1High": forecast[0]['high'],
             "weatherDay1Low": forecast[0]['low'],
             "weatherDay1Text": forecast[0]['text'],
-            "weatherDay2": forecast[1]['date'],
+            "weatherDay2": forecast[1]['day'],
+            "weatherDate2": forecast[1]['date'],
             "weatherDay2High": forecast[1]['high'],
             "weatherDay2Low": forecast[1]['low'],
             "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[1]['date'],
-            "weatherDay3High": forecast[1]['high'],
-            "weatherDay3Low": forecast[1]['low'],
-            "weatherDay3Text": forecast[1]['text']
+            "weatherDay3": forecast[2]['day'],
+            "weatherDate3": forecast[2]['date'],
+            "weatherDay3High": forecast[2]['high'],
+            "weatherDay3Low": forecast[2]['low'],
+            "weatherDay3Text": forecast[2]['text']
         }
     }
     return jsonify(forecast_dict)
