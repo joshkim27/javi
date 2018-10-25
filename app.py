@@ -14,7 +14,7 @@ from calendar import monthrange
 from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
 
@@ -104,6 +104,8 @@ def create_daily():
 
     uimDailySales = request.form['uimDailySales']
     uimDailyBuying = request.form['uimDailyBuying']
+
+    logger.info('daily_input|'+userId+'|'+uimDailySales+'|'+uimDailyBuying)
 
     todayDate = datetime.today()
 
@@ -829,14 +831,6 @@ def resetDailyInputCheck(event, context):
         )
 
 
-def weatherBroadcasting(event, context):
-    scan_response = client.scan(
-        TableName=USERS_TABLE
-    )
-    for i in scan_response['Items']:
-        send_message(i['userId']['S'], 'WeatherReport', {})
-
-################# test source ################################
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
     # user의 위도 경도 호출
@@ -870,18 +864,21 @@ def get_weather(userId):
     forecast = response.json()['query']['results']['channel']['item']['forecast']
     forecast_dict = {
         "set_attributes": {
-            "weatherDay1": forecast[0]['date'],
+            "weatherDay1": forecast[0]['day'],
+            "weatherDate1": forecast[0]['date'],
             "weatherDay1High": forecast[0]['high'],
             "weatherDay1Low": forecast[0]['low'],
             "weatherDay1Text": forecast[0]['text'],
-            "weatherDay2": forecast[1]['date'],
+            "weatherDay2": forecast[1]['day'],
+            "weatherDate2": forecast[1]['date'],
             "weatherDay2High": forecast[1]['high'],
             "weatherDay2Low": forecast[1]['low'],
             "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[1]['date'],
-            "weatherDay3High": forecast[1]['high'],
-            "weatherDay3Low": forecast[1]['low'],
-            "weatherDay3Text": forecast[1]['text']
+            "weatherDay3": forecast[2]['day'],
+            "weatherDate3": forecast[2]['date'],
+            "weatherDay3High": forecast[2]['high'],
+            "weatherDay3Low": forecast[2]['low'],
+            "weatherDay3Text": forecast[2]['text']
         }
     }
     return jsonify(forecast_dict)
