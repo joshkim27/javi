@@ -29,6 +29,7 @@ DAILY_TABLE = os.environ['JAVI_DAILY_TABLE']
 WEEKLY_TABLE = os.environ['JAVI_WEEKLY_TABLE']
 MONTHLY_TABLE = os.environ['JAVI_MONTHLY_TABLE']
 YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
+CONFIG_TABLE = os.environ['JAVI_CONFIG_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
@@ -747,9 +748,111 @@ def calculate_average_back(item, start_date, end_date):
             'temp': [int(datetime.now().strftime('%Y')), int(datetime.now().strftime('%m'))],
             'left_days': date_range[1] - int(datetime.now().strftime('%d'))
             }
+# dailiyInputCheck 매일 자정에 초기화
+def resetDailyInputCheck(event, context):
+    scan_response = client.scan(
+        TableName=USERS_TABLE
+    )
+    targetList = []
+    for i in scan_response['Items']:
+        # test start
+        if i['dailyInputCheck']:
+            targetList.append(i['userId'])
+        #test end
+
+        update_response = client.update_item(
+            TableName=USERS_TABLE,
+            Key={
+                'userId': {'S': i['userId']['S']}
+            },
+            AttributeUpdates={
+                'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
+            }
+        )
+    # test start
+    client.put_item(
+        TableName=CONFIG_TABLE,
+        Item={
+            'configKey': {'S': 'dailyInputTarget'},
+            'targetList': {'L': targetList},
+        }
+    )
+    # test end
+
+
+@app.route("/weather/<string:userId>")
+def get_weather(userId):
+    # user의 위도 경도 호출
+    resp = client.get_item(
+        TableName=DAILY_TABLE,
+        Key={
+            'userId': { 'S': userId }
+        }
+    )
+
+    item = resp.get('Item')
+    if not item:
+        return jsonify({'error': 'User does not exist'}), 404
+
+    longitude = item.get('longitude').get('S')
+    latitude = item.get('latitude').get('S')
+    # longitude = '28.451850'
+    # latitude = '77.08684'
+
+    # yahoo api 호출
+    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
+
+    try:
+        response = requests.get(yql, verify=True)
+    except HTTPError as e:
+        logger.error("Request failed: %d %s", e.code, e.reason)
+    except URLError as e:
+        logger.error("Server connection failed: %s", e.reason)
+
+    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
+    forecast = response.json()['query']['results']['channel']['item']['forecast']
+    forecast_dict = {
+        "set_attributes": {
+            "weatherDay1": forecast[0]['day'],
+            "weatherDate1": forecast[0]['date'],
+            "weatherDay1High": forecast[0]['high'],
+            "weatherDay1Low": forecast[0]['low'],
+            "weatherDay1Text": forecast[0]['text'],
+            "weatherDay2": forecast[1]['day'],
+            "weatherDate2": forecast[1]['date'],
+            "weatherDay2High": forecast[1]['high'],
+            "weatherDay2Low": forecast[1]['low'],
+            "weatherDay2Text": forecast[1]['text'],
+            "weatherDay3": forecast[2]['day'],
+            "weatherDate3": forecast[2]['date'],
+            "weatherDay3High": forecast[2]['high'],
+            "weatherDay3Low": forecast[2]['low'],
+            "weatherDay3Text": forecast[2]['text']
+        }
+    }
+    return jsonify(forecast_dict)
+
 
 ################# test source start ##########################
 
+# 전날 dailyInput 한 사용자에게만 broadcasting
+# def broadcastingSendDailyInput(event, context):
+#     scan_response = client.scan(
+#         TableName=USERS_TABLE
+#     )
+#     for i in scan_response['Items']:
+#         print(i['userId']['S'])
+#         if i['dailyInputCheck']:
+#             pass
+#         update_response = client.update_item(
+#             TableName=USERS_TABLE,
+#             Key={
+#                 'userId': {'S': i['userId']['S']}
+#             },
+#             AttributeUpdates={
+#                 'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
+#             }
+#         )
 
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>",
            methods=['GET'])
@@ -812,73 +915,3 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
                         '10000', '1', '10000', '10000')
 
     return jsonify({})
-
-# dailiyInputCheck 매일 자정에 초기화
-def resetDailyInputCheck(event, context):
-    scan_response = client.scan(
-        TableName=USERS_TABLE
-    )
-    for i in scan_response['Items']:
-        print(i['userId']['S'])
-        update_response = client.update_item(
-            TableName=USERS_TABLE,
-            Key={
-                'userId': {'S': i['userId']['S']}
-            },
-            AttributeUpdates={
-                'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
-            }
-        )
-
-
-@app.route("/weather/<string:userId>")
-def get_weather(userId):
-    # user의 위도 경도 호출
-    # resp = client.get_item(
-    #     TableName=DAILY_TABLE,
-    #     Key={
-    #         'userId': { 'S': userId }
-    #     }
-    # )
-
-    # item = resp.get('Item')
-    # if not item:
-    #     return jsonify({'error': 'User does not exist'}), 404
-
-    # longitude = item.get('longitude').get('S')
-    # latitude = item.get('latitude').get('S')
-    longitude = '28.451850'
-    latitude = '77.08684'
-
-    # yahoo api 호출
-    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
-
-    try:
-        response = requests.get(yql, verify=True)
-    except HTTPError as e:
-        logger.error("Request failed: %d %s", e.code, e.reason)
-    except URLError as e:
-        logger.error("Server connection failed: %s", e.reason)
-
-    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
-    forecast = response.json()['query']['results']['channel']['item']['forecast']
-    forecast_dict = {
-        "set_attributes": {
-            "weatherDay1": forecast[0]['day'],
-            "weatherDate1": forecast[0]['date'],
-            "weatherDay1High": forecast[0]['high'],
-            "weatherDay1Low": forecast[0]['low'],
-            "weatherDay1Text": forecast[0]['text'],
-            "weatherDay2": forecast[1]['day'],
-            "weatherDate2": forecast[1]['date'],
-            "weatherDay2High": forecast[1]['high'],
-            "weatherDay2Low": forecast[1]['low'],
-            "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[2]['day'],
-            "weatherDate3": forecast[2]['date'],
-            "weatherDay3High": forecast[2]['high'],
-            "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text']
-        }
-    }
-    return jsonify(forecast_dict)
