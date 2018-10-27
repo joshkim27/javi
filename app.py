@@ -383,7 +383,7 @@ def get_weekly_report2(userId):
     message_foot = cvWeek + '|' + str(sum_sales) + '|' + str(sum_buying) + '|' + str(sum_sales-sum_buying)
 
     return jsonify({
-        "message": message_header + message_body + message_foot
+        "messages":[ {"text": message_header + message_body + message_foot }]
     })
 
 @app.route("/callblock/<string:userId>/<string:blockName>")
