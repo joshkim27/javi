@@ -385,48 +385,34 @@ def get_duedate(userId):
     monthly_table = dynamodb.Table(MONTHLY_TABLE)
 
     response = monthly_table.query(
-        FilterExpression=Key('userMonthlyId').eq(userId+this_month),
+        KeyConditionExpression=Key('userMonthlyId').eq(userId+this_month),
     )
 
-    item_monthly = response.get('Item')
+    item_monthly = response.get('Items')[0]
+    logger.debug(item_monthly)
     if not item_monthly:
-        temp = 0
-        uimRentalPayDate = 0
-        uioRentalAmount = '0'
-        uioEmployeeNumber = '0'
-        uioEmployeeAmount = '0'
-        uimEmployeePayDate = 0
-        uioOtherCostDueDate = 0
-        uioOtherCost = '0'
-
-        cvPaymentDate = 'None'
+        message_body =  " - No due date"
     else:
-        uioRentalPeriod = item_monthly.get('uioRentalPeriod').get('S')
-        uimRentalPayDate = int(item_monthly.get('uimRentalPayDate').get('N'))
-        uioRentalAmount = item_monthly.get('uioRentalAmount').get('N')
-        uioEmployeeNumber = item_monthly.get('uioEmployeeNumber').get('N')
-        uioEmployeeAmount = item_monthly.get('uioEmployeeAmount').get('N')
-        uimEmployeePayDate = int(item_monthly.get('uimEmployeePayDate').get('N'))
-        uioOtherCostDueDate = int(item_monthly.get('uioOtherCostDueDate').get('N'))
-        uioOtherCost = item_monthly.get('uioOtherCost').get('N')
+        uimRentalPayDate = item_monthly['uimRentalPayDate']
+        uioRentalAmount = item_monthly['uioRentalAmount']
+        uioEmployeeAmount = item_monthly['uioEmployeeAmount']
+        uimEmployeePayDate = item_monthly['uimEmployeePayDate']
+        uioOtherCostDueDate = item_monthly['uioOtherCostDueDate']
+        uioOtherCost = item_monthly['uioOtherCost']
 
         temp, cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
         # date 뒤에 postfix 추가
         postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
         cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
 
+        if temp == uimRentalPayDate:
+            message_body = ' - '+ str(uioRentalAmount) + 'rs. Rental fee on \n' + cvPaymentDate
+        elif temp == uimEmployeePayDate:
+            message_body = ' - '+ str(uioEmployeeAmount) + 'rs. Salary pay on \n' + cvPaymentDate
+        elif temp == uioOtherCostDueDate:
+            message_body = ' - ' + str(uioOtherCost) + 'rs. Other cost on \n' + cvPaymentDate
+
     message_header = 'Next Due Date\n'
-    message_body = ' - '
-
-    if 0 != temp and temp == uimRentalPayDate:
-        message_body = message_body + str(uioRentalAmount) +'rs. Rental fee on \n' + cvPaymentDate
-    elif temp == uimEmployeePayDate:
-        message_body = message_body + str(uioEmployeeAmount) + 'rs. Salary pay on \n' + cvPaymentDate
-    elif temp == uioOtherCostDueDate:
-        message_body = message_body + str(uioOtherCost) + 'rs. Other cost on \n' + cvPaymentDate
-    else:
-        message_body = message_body + "No due date"
-
 
     return jsonify({
         "messages":[ {"text": message_header + message_body }]
