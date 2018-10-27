@@ -41,8 +41,11 @@ if IS_OFFLINE:
         region_name='localhost',
         endpoint_url='http://localhost:8000'
     )
+    dynamodb = boto3.resource('dynamodb', region_name='localhost', endpoint_url="http://localhost:8000")
+
 else:
     client = boto3.client('dynamodb')
+    dynamodb = boto3.resource('dynamodb')
 
 
 @app.route("/")
@@ -322,6 +325,66 @@ def get_weekly_report(userId):
         },
     })
 
+def add_postfix(date):
+    postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+    date = date[-2:] + postfix_date.get(date[-2:], 'th')
+    return date
+
+@app.route("/weekly/thisweek2/<string:userId>")
+def get_weekly_report2(userId):
+    this_month = datetime.now().strftime('%Y%m')
+    weekday = datetime.now().weekday()
+    cvWeek = 'W' + datetime.now().strftime('%W')
+
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    dates = []
+
+    for x in range(weekday+1):
+        dates.append((datetime.now() - timedelta(days=(weekday-x))).strftime('%Y%m%d'))
+
+    logger.debug(dates)
+
+    fe = Key('userDailyId').between(userId + dates[0], userId + dates[weekday])
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+
+    temp ={}
+
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    logger.debug(temp)
+
+    message_header = cvWeek +" Sales report\n" + add_postfix_date(int(dates[0][-2:])) + ' ~ ' \
+                     + add_postfix_date(int(dates[weekday][-2:])) +'\n'
+    message_body = 'Date|Sales|Buying|Profit\n'
+
+    sum_buying =0
+    sum_sales =0
+
+    for y in dates:
+
+        if (userId+y) in temp:
+            z = temp[userId + y]
+            message_body = message_body + add_postfix(y) + '|' + str(z[0])+ '|'+ str(z[1])+ '|' + str(z[0]-z[1])
+            sum_sales = sum_sales + z[0]
+            sum_buying = sum_buying + z[1]
+        else:
+            message_body = message_body + add_postfix(y) + '|'+ "    -|    -|    -"
+
+        message_body = message_body+ '\n'
+
+    logger.info(message_body)
+
+    message_foot = cvWeek + '|' + str(sum_sales) + '|' + str(sum_buying) + '|' + str(sum_sales-sum_buying)
+
+    return jsonify({
+        "message": message_header + message_body + message_foot
+    })
 
 @app.route("/callblock/<string:userId>/<string:blockName>")
 def call_block(userId, blockName):
