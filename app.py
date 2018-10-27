@@ -332,10 +332,8 @@ def add_postfix(date):
 
 @app.route("/weekly/thisweek2/<string:userId>")
 def get_weekly_report2(userId):
-    this_month = datetime.now().strftime('%Y%m')
     weekday = datetime.now().weekday()
     cvWeek = 'W' + datetime.now().strftime('%W')
-
 
     daily_table = dynamodb.Table(DAILY_TABLE)
 
@@ -343,8 +341,6 @@ def get_weekly_report2(userId):
 
     for x in range(weekday+1):
         dates.append((datetime.now() - timedelta(days=(weekday-x))).strftime('%Y%m%d'))
-
-    logger.debug(dates)
 
     fe = Key('userDailyId').between(userId + dates[0], userId + dates[weekday])
     response = daily_table.scan(
@@ -357,10 +353,8 @@ def get_weekly_report2(userId):
         logger.debug(i)
         temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
 
-    logger.debug(temp)
-
     message_header = cvWeek +" Sales report\n" + add_postfix_date(int(dates[0][-2:])) + ' ~ ' \
-                     + add_postfix_date(int(dates[weekday][-2:])) +'\n'
+                     + add_postfix_date(int(dates[weekday][-2:])) +'\n\n'
     message_body = 'Date|Sales|Buying|Profit\n'
 
     sum_buying =0
@@ -378,12 +372,64 @@ def get_weekly_report2(userId):
 
         message_body = message_body+ '\n'
 
-    logger.info(message_body)
-
-    message_foot = cvWeek + '|' + str(sum_sales) + '|' + str(sum_buying) + '|' + str(sum_sales-sum_buying)
+    message_foot = '\n' + cvWeek + '|' + str(sum_sales) + '|' + str(sum_buying) + '|' + str(sum_sales-sum_buying)
 
     return jsonify({
         "messages":[ {"text": message_header + message_body + message_foot }]
+    })
+
+@app.route("/duedate/<string:userId>")
+def get_duedate(userId):
+    this_month = datetime.now().strftime('%Y%m')
+
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    response = monthly_table.query(
+        FilterExpression=Key('userMonthlyId').eq(userId+this_month),
+    )
+
+    item_monthly = response.get('Item')
+    if not item_monthly:
+        temp = 0
+        uimRentalPayDate = 0
+        uioRentalAmount = '0'
+        uioEmployeeNumber = '0'
+        uioEmployeeAmount = '0'
+        uimEmployeePayDate = 0
+        uioOtherCostDueDate = 0
+        uioOtherCost = '0'
+
+        cvPaymentDate = 'None'
+    else:
+        uioRentalPeriod = item_monthly.get('uioRentalPeriod').get('S')
+        uimRentalPayDate = int(item_monthly.get('uimRentalPayDate').get('N'))
+        uioRentalAmount = item_monthly.get('uioRentalAmount').get('N')
+        uioEmployeeNumber = item_monthly.get('uioEmployeeNumber').get('N')
+        uioEmployeeAmount = item_monthly.get('uioEmployeeAmount').get('N')
+        uimEmployeePayDate = int(item_monthly.get('uimEmployeePayDate').get('N'))
+        uioOtherCostDueDate = int(item_monthly.get('uioOtherCostDueDate').get('N'))
+        uioOtherCost = item_monthly.get('uioOtherCost').get('N')
+
+        temp, cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
+        # date 뒤에 postfix 추가
+        postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+        cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
+
+    message_header = 'Next Due Date\n'
+    message_body = ' - '
+
+    if 0 != temp and temp == uimRentalPayDate:
+        message_body = message_body + str(uioRentalAmount) +'rs. Rental fee on \n' + cvPaymentDate
+    elif temp == uimEmployeePayDate:
+        message_body = message_body + str(uioEmployeeAmount) + 'rs. Salary pay on \n' + cvPaymentDate
+    elif temp == uioOtherCostDueDate:
+        message_body = message_body + str(uioOtherCost) + 'rs. Other cost on \n' + cvPaymentDate
+    else:
+        message_body = message_body + "No due date"
+
+
+    return jsonify({
+        "messages":[ {"text": message_header + message_body }]
     })
 
 @app.route("/callblock/<string:userId>/<string:blockName>")
@@ -723,9 +769,9 @@ def cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueD
     for payment_date in date_list:
         temp = date.today().replace(day=payment_date)
         if temp > today_date:
-            return temp.strftime('%d %b')
+            return payment_date, temp.strftime('%d %b')
 
-    return (date.today().replace(day=date_list[0]) + relativedelta(months=+1)).strftime('%d %b')
+    return payment_date, (date.today().replace(day=date_list[0]) + relativedelta(months=+1)).strftime('%d %b')
 
 
 def daily_average(userId):
