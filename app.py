@@ -29,6 +29,7 @@ DAILY_TABLE = os.environ['JAVI_DAILY_TABLE']
 WEEKLY_TABLE = os.environ['JAVI_WEEKLY_TABLE']
 MONTHLY_TABLE = os.environ['JAVI_MONTHLY_TABLE']
 YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
+CONFIG_TABLE = os.environ['JAVI_CONFIG_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
@@ -40,8 +41,11 @@ if IS_OFFLINE:
         region_name='localhost',
         endpoint_url='http://localhost:8000'
     )
+    dynamodb = boto3.resource('dynamodb', region_name='localhost', endpoint_url="http://localhost:8000")
+
 else:
     client = boto3.client('dynamodb')
+    dynamodb = boto3.resource('dynamodb')
 
 
 @app.route("/")
@@ -321,6 +325,98 @@ def get_weekly_report(userId):
         },
     })
 
+def add_postfix(date):
+    postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+    date = date[-2:] + postfix_date.get(date[-2:], 'th')
+    return date
+
+@app.route("/weekly/thisweek2/<string:userId>")
+def get_weekly_report2(userId):
+    weekday = datetime.now().weekday()
+    cvWeek = 'W' + datetime.now().strftime('%W')
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    dates = []
+
+    for x in range(weekday+1):
+        dates.append((datetime.now() - timedelta(days=(weekday-x))).strftime('%Y%m%d'))
+
+    fe = Key('userDailyId').between(userId + dates[0], userId + dates[weekday])
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+
+    temp ={}
+
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    message_header = cvWeek +" Sales report\n" + add_postfix_date(int(dates[0][-2:])) + ' ~ ' \
+                     + add_postfix_date(int(dates[weekday][-2:])) +'\n\n'
+    message_body = 'Date|Sales|Buying|Profit\n'
+
+    sum_buying =0
+    sum_sales =0
+
+    for y in dates:
+
+        if (userId+y) in temp:
+            z = temp[userId + y]
+            message_body = message_body + add_postfix(y) + '|' + str(z[0])+ '|'+ str(z[1])+ '|' + str(z[0]-z[1])
+            sum_sales = sum_sales + z[0]
+            sum_buying = sum_buying + z[1]
+        else:
+            message_body = message_body + add_postfix(y) + '|'+ "    -|    -|    -"
+
+        message_body = message_body+ '\n'
+
+    message_foot = '\n' + cvWeek + '|' + str(sum_sales) + '|' + str(sum_buying) + '|' + str(sum_sales-sum_buying)
+
+    return jsonify({
+        "messages":[ {"text": message_header + message_body + message_foot }]
+    })
+
+@app.route("/duedate/<string:userId>")
+def get_duedate(userId):
+    this_month = datetime.now().strftime('%Y%m')
+
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    response = monthly_table.query(
+        KeyConditionExpression=Key('userMonthlyId').eq(userId+this_month),
+    )
+
+    item_monthly = response.get('Items')[0]
+    logger.debug(item_monthly)
+    if not item_monthly:
+        message_body =  " - No due date"
+    else:
+        uimRentalPayDate = item_monthly['uimRentalPayDate']
+        uioRentalAmount = item_monthly['uioRentalAmount']
+        uioEmployeeAmount = item_monthly['uioEmployeeAmount']
+        uimEmployeePayDate = item_monthly['uimEmployeePayDate']
+        uioOtherCostDueDate = item_monthly['uioOtherCostDueDate']
+        uioOtherCost = item_monthly['uioOtherCost']
+
+        temp, cvPaymentDate = cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueDate)
+        # date 뒤에 postfix 추가
+        postfix_date = {'01': 'st', '21': 'st', '31': 'st', '02': 'nd', '22': 'nd', '03': 'rd', '23': 'rd'}
+        cvPaymentDate = cvPaymentDate[:2] + postfix_date.get(cvPaymentDate[:2], 'th') + cvPaymentDate[2:]
+
+        if temp == uimRentalPayDate:
+            message_body = ' - '+ str(uioRentalAmount) + 'rs. Rental fee on \n' + cvPaymentDate
+        elif temp == uimEmployeePayDate:
+            message_body = ' - '+ str(uioEmployeeAmount) + 'rs. Salary pay on \n' + cvPaymentDate
+        elif temp == uioOtherCostDueDate:
+            message_body = ' - ' + str(uioOtherCost) + 'rs. Other cost on \n' + cvPaymentDate
+
+    message_header = 'Next Due Date\n'
+
+    return jsonify({
+        "messages":[ {"text": message_header + message_body }]
+    })
 
 @app.route("/callblock/<string:userId>/<string:blockName>")
 def call_block(userId, blockName):
@@ -659,9 +755,9 @@ def cal_next_payment_date(uimRentalPayDate, uimEmployeePayDate, uioOtherCostDueD
     for payment_date in date_list:
         temp = date.today().replace(day=payment_date)
         if temp > today_date:
-            return temp.strftime('%d %b')
+            return payment_date, temp.strftime('%d %b')
 
-    return (date.today().replace(day=date_list[0]) + relativedelta(months=+1)).strftime('%d %b')
+    return payment_date, (date.today().replace(day=date_list[0]) + relativedelta(months=+1)).strftime('%d %b')
 
 
 def daily_average(userId):
@@ -747,9 +843,111 @@ def calculate_average_back(item, start_date, end_date):
             'temp': [int(datetime.now().strftime('%Y')), int(datetime.now().strftime('%m'))],
             'left_days': date_range[1] - int(datetime.now().strftime('%d'))
             }
+# dailiyInputCheck 매일 자정에 초기화
+def resetDailyInputCheck(event, context):
+    scan_response = client.scan(
+        TableName=USERS_TABLE
+    )
+    targetList = []
+    for i in scan_response['Items']:
+        # test start
+        if i['dailyInputCheck']:
+            targetList.append(i['userId'])
+        #test end
+
+        update_response = client.update_item(
+            TableName=USERS_TABLE,
+            Key={
+                'userId': {'S': i['userId']['S']}
+            },
+            AttributeUpdates={
+                'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
+            }
+        )
+    # test start
+    client.put_item(
+        TableName=CONFIG_TABLE,
+        Item={
+            'configKey': {'S': 'dailyInputTarget'},
+            'targetList': {'L': targetList},
+        }
+    )
+    # test end
+
+
+@app.route("/weather/<string:userId>")
+def get_weather(userId):
+    # user의 위도 경도 호출
+    resp = client.get_item(
+        TableName=DAILY_TABLE,
+        Key={
+            'userId': { 'S': userId }
+        }
+    )
+
+    item = resp.get('Item')
+    if not item:
+        return jsonify({'error': 'User does not exist'}), 404
+
+    longitude = item.get('longitude').get('S')
+    latitude = item.get('latitude').get('S')
+    # longitude = '28.451850'
+    # latitude = '77.08684'
+
+    # yahoo api 호출
+    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
+
+    try:
+        response = requests.get(yql, verify=True)
+    except HTTPError as e:
+        logger.error("Request failed: %d %s", e.code, e.reason)
+    except URLError as e:
+        logger.error("Server connection failed: %s", e.reason)
+
+    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
+    forecast = response.json()['query']['results']['channel']['item']['forecast']
+    forecast_dict = {
+        "set_attributes": {
+            "weatherDay1": forecast[0]['day'],
+            "weatherDate1": forecast[0]['date'],
+            "weatherDay1High": forecast[0]['high'],
+            "weatherDay1Low": forecast[0]['low'],
+            "weatherDay1Text": forecast[0]['text'],
+            "weatherDay2": forecast[1]['day'],
+            "weatherDate2": forecast[1]['date'],
+            "weatherDay2High": forecast[1]['high'],
+            "weatherDay2Low": forecast[1]['low'],
+            "weatherDay2Text": forecast[1]['text'],
+            "weatherDay3": forecast[2]['day'],
+            "weatherDate3": forecast[2]['date'],
+            "weatherDay3High": forecast[2]['high'],
+            "weatherDay3Low": forecast[2]['low'],
+            "weatherDay3Text": forecast[2]['text']
+        }
+    }
+    return jsonify(forecast_dict)
+
 
 ################# test source start ##########################
 
+# 전날 dailyInput 한 사용자에게만 broadcasting
+# def broadcastingSendDailyInput(event, context):
+#     scan_response = client.scan(
+#         TableName=USERS_TABLE
+#     )
+#     for i in scan_response['Items']:
+#         print(i['userId']['S'])
+#         if i['dailyInputCheck']:
+#             pass
+#         update_response = client.update_item(
+#             TableName=USERS_TABLE,
+#             Key={
+#                 'userId': {'S': i['userId']['S']}
+#             },
+#             AttributeUpdates={
+#                 'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
+#             }
+#         )
 
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>",
            methods=['GET'])
@@ -812,73 +1010,3 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
                         '10000', '1', '10000', '10000')
 
     return jsonify({})
-
-# dailiyInputCheck 매일 자정에 초기화
-def resetDailyInputCheck(event, context):
-    scan_response = client.scan(
-        TableName=USERS_TABLE
-    )
-    for i in scan_response['Items']:
-        print(i['userId']['S'])
-        update_response = client.update_item(
-            TableName=USERS_TABLE,
-            Key={
-                'userId': {'S': i['userId']['S']}
-            },
-            AttributeUpdates={
-                'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
-            }
-        )
-
-
-@app.route("/weather/<string:userId>")
-def get_weather(userId):
-    # user의 위도 경도 호출
-    # resp = client.get_item(
-    #     TableName=DAILY_TABLE,
-    #     Key={
-    #         'userId': { 'S': userId }
-    #     }
-    # )
-
-    # item = resp.get('Item')
-    # if not item:
-    #     return jsonify({'error': 'User does not exist'}), 404
-
-    # longitude = item.get('longitude').get('S')
-    # latitude = item.get('latitude').get('S')
-    longitude = '28.451850'
-    latitude = '77.08684'
-
-    # yahoo api 호출
-    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
-
-    try:
-        response = requests.get(yql, verify=True)
-    except HTTPError as e:
-        logger.error("Request failed: %d %s", e.code, e.reason)
-    except URLError as e:
-        logger.error("Server connection failed: %s", e.reason)
-
-    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
-    forecast = response.json()['query']['results']['channel']['item']['forecast']
-    forecast_dict = {
-        "set_attributes": {
-            "weatherDay1": forecast[0]['day'],
-            "weatherDate1": forecast[0]['date'],
-            "weatherDay1High": forecast[0]['high'],
-            "weatherDay1Low": forecast[0]['low'],
-            "weatherDay1Text": forecast[0]['text'],
-            "weatherDay2": forecast[1]['day'],
-            "weatherDate2": forecast[1]['date'],
-            "weatherDay2High": forecast[1]['high'],
-            "weatherDay2Low": forecast[1]['low'],
-            "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[2]['day'],
-            "weatherDate3": forecast[2]['date'],
-            "weatherDay3High": forecast[2]['high'],
-            "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text']
-        }
-    }
-    return jsonify(forecast_dict)
