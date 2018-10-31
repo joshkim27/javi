@@ -878,16 +878,16 @@ def resetDailyInputCheck(event, context):
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
     # user의 위도 경도 호출
-    resp = client.get_item(
-        TableName=DAILY_TABLE,
-        Key={
-            'userId': { 'S': userId }
-        }
-    )
+    # resp = client.get_item(
+    #     TableName=DAILY_TABLE,
+    #     Key={
+    #         'userId': { 'S': userId }
+    #     }
+    # )
 
-    item = resp.get('Item')
-    if not item:
-        return jsonify({'error': 'User does not exist'}), 404
+    # item = resp.get('Item')
+    # if not item:
+    #     return jsonify({'error': 'User does not exist'}), 404
 
     # longitude = item.get('longitude').get('S')
     # latitude = item.get('latitude').get('S')
