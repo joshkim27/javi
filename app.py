@@ -1015,9 +1015,6 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
 def test_monthly_migrate(fromMonth, toMonth):
     monthly_table = dynamodb.Table(MONTHLY_TABLE)
     scan_response = monthly_table.scan()
-    # scan_response = client.scan(
-    #     TableName=MONTHLY_TABLE
-    # )
     for i in scan_response['Items']:
         if  i['userMonthlyId'][-6:] == fromMonth:
             print(i)
@@ -1040,7 +1037,5 @@ def test_monthly_migrate(fromMonth, toMonth):
                 )
             except KeyError:
                 logger.info('keys not exist')
-            
-        # print(i['userMonthlyId']['S'])
-
+    
     return jsonify({})
