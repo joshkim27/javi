@@ -1022,7 +1022,7 @@ def test_monthly_migrate(fromMonth, toMonth):
         if  i['userMonthlyId'][-6:] == fromMonth:
             print(i)
             try:
-                passmonthly_table.put_item(
+                monthly_table.put_item(
                    Item={
                         'userMonthlyId': i['userMonthlyId'][:16] + toMonth,
                         'cvMonthlyBuying': 0,
