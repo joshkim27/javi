@@ -1010,3 +1010,12 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
                         '10000', '1', '10000', '10000')
 
     return jsonify({})
+
+@app.route("/test/monthly/migrate/<string:fromMonth>/<string:toMonth>")
+def test_monthly_migrate(fromMonth, toMonth):
+    scan_response = client.scan(
+        TableName=MONTHLY_TABLE
+    )
+    for i in scan_response['Items']:
+        print(i)
+        print(i['userMonthlyId']['S'])
