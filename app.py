@@ -1021,22 +1021,26 @@ def test_monthly_migrate(fromMonth, toMonth):
     for i in scan_response['Items']:
         if  i['userMonthlyId'][-6:] == fromMonth:
             print(i)
-            monthly_table.put_item(
-               Item={
-                    'userMonthlyId': i['userMonthlyId'][:16] + toMonth,
-                    'cvMonthlyBuying': 0,
-                    'cvMonthlySales': 0,
-                    'updated_at': datetime.utcnow().isoformat(),
-                    'uimEmployeePayDate': i['uimEmployeePayDate'],
-                    'uimRentalPayDate': i['uimRentalPayDate'],
-                    'uioEmployeeAmount': i['uioEmployeeAmount'],
-                    'uioEmployeeNumber': i['uioEmployeeNumber'],
-                    'uioOtherCost': i['uioOtherCost'],
-                    'uioOtherCostDueDate': i['uioOtherCostDueDate'],
-                    'uioRentalAmount': i['uioRentalAmount'],
-                    'uioRentalPeriod': i['uioRentalPeriod']
-                }
-            )
+            try:
+                passmonthly_table.put_item(
+                   Item={
+                        'userMonthlyId': i['userMonthlyId'][:16] + toMonth,
+                        'cvMonthlyBuying': 0,
+                        'cvMonthlySales': 0,
+                        'updated_at': datetime.utcnow().isoformat(),
+                        'uimEmployeePayDate': i['uimEmployeePayDate'],
+                        'uimRentalPayDate': i['uimRentalPayDate'],
+                        'uioEmployeeAmount': i['uioEmployeeAmount'],
+                        'uioEmployeeNumber': i['uioEmployeeNumber'],
+                        'uioOtherCost': i['uioOtherCost'],
+                        'uioOtherCostDueDate': i['uioOtherCostDueDate'],
+                        'uioRentalAmount': i['uioRentalAmount'],
+                        'uioRentalPeriod': i['uioRentalPeriod']
+                    }
+                )
+            except KeyError:
+                logger.info('keys not exist')
+            
         # print(i['userMonthlyId']['S'])
 
     return jsonify({})
