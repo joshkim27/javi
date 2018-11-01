@@ -1019,11 +1019,24 @@ def test_monthly_migrate(fromMonth, toMonth):
     #     TableName=MONTHLY_TABLE
     # )
     for i in scan_response['Items']:
-        print(i)
-        i['userMonthlyId'] = i['userMonthlyId'][:16] + toMonth
-        i['cvMonthlyBuying'] = 0
-        i['cvMonthlySales'] = 0
-        print(i)
+        if  i['userMonthlyId'][-6:] == fromMonth:
+            print(i)
+            monthly_table.put_item(
+               Item={
+                    'userMonthlyId': i['userMonthlyId'][:16] + toMonth,
+                    'cvMonthlyBuying': 0,
+                    'cvMonthlySales': 0,
+                    'updated_at': datetime.utcnow().isoformat(),
+                    'uimEmployeePayDate': i['uimEmployeePayDate'],
+                    'uimRentalPayDate': i['uimRentalPayDate'],
+                    'uioEmployeeAmount': i['uioEmployeeAmount'],
+                    'uioEmployeeNumber': i['uioEmployeeNumber'],
+                    'uioOtherCost': i['uioOtherCost'],
+                    'uioOtherCostDueDate': i['uioOtherCostDueDate'],
+                    'uioRentalAmount': i['uioRentalAmount'],
+                    'uioRentalPeriod': i['uioRentalPeriod']
+                }
+            )
         # print(i['userMonthlyId']['S'])
 
     return jsonify({})
