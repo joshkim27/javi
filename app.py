@@ -1013,9 +1013,19 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
 
 @app.route("/test/monthly/migrate/<string:fromMonth>/<string:toMonth>")
 def test_monthly_migrate(fromMonth, toMonth):
-    scan_response = client.scan(
-        TableName=MONTHLY_TABLE
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+    scan_response = monthly_table.scan(
+        FilterExpression=Key('userMonthlyId')
     )
+    # scan_response = client.scan(
+    #     TableName=MONTHLY_TABLE
+    # )
     for i in scan_response['Items']:
         print(i)
-        print(i['userMonthlyId']['S'])
+        i['userMonthlyId'] = i['userMonthlyId'][:16] + toMonth
+        i['cvMonthlyBuying'] = 0
+        i['cvMonthlySales'] = 0
+        print(i)
+        # print(i['userMonthlyId']['S'])
+
+    return jsonify({})
