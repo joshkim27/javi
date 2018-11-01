@@ -1010,3 +1010,32 @@ def test_cost(userMonthlyId, uimRentalPayDate, uioOtherCostDueDate, uimEmployeeP
                         '10000', '1', '10000', '10000')
 
     return jsonify({})
+
+@app.route("/test/monthly/migrate/<string:fromMonth>/<string:toMonth>")
+def test_monthly_migrate(fromMonth, toMonth):
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+    scan_response = monthly_table.scan()
+    for i in scan_response['Items']:
+        if  i['userMonthlyId'][-6:] == fromMonth:
+            print(i)
+            try:
+                monthly_table.put_item(
+                   Item={
+                        'userMonthlyId': i['userMonthlyId'][:16] + toMonth,
+                        'cvMonthlyBuying': 0,
+                        'cvMonthlySales': 0,
+                        'updated_at': datetime.utcnow().isoformat(),
+                        'uimEmployeePayDate': i['uimEmployeePayDate'],
+                        'uimRentalPayDate': i['uimRentalPayDate'],
+                        'uioEmployeeAmount': i['uioEmployeeAmount'],
+                        'uioEmployeeNumber': i['uioEmployeeNumber'],
+                        'uioOtherCost': i['uioOtherCost'],
+                        'uioOtherCostDueDate': i['uioOtherCostDueDate'],
+                        'uioRentalAmount': i['uioRentalAmount'],
+                        'uioRentalPeriod': i['uioRentalPeriod']
+                    }
+                )
+            except KeyError:
+                logger.info('keys not exist')
+    
+    return jsonify({})
