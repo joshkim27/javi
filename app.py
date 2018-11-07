@@ -30,6 +30,7 @@ WEEKLY_TABLE = os.environ['JAVI_WEEKLY_TABLE']
 MONTHLY_TABLE = os.environ['JAVI_MONTHLY_TABLE']
 YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
 CONFIG_TABLE = os.environ['JAVI_CONFIG_TABLE']
+LEDGER_TABLE = os.environ['JAVI_LEDGER_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
@@ -1039,3 +1040,44 @@ def test_monthly_migrate(fromMonth, toMonth):
                 logger.info('keys not exist')
     
     return jsonify({})
+
+@app.route("/test/ledger/add/<string:userId>/<string:customerName>/<string:productAmount>")
+def addLedger(userId, customerName, productAmount):
+    ledger_table = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledger_table.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    count = response['Count']
+    item = response['Items']
+    if count == 0:
+        ledger_table.put_item(
+            Item={
+                'userLedgerId': userId,
+                'ledgers': [{
+                    'index': count + 1,
+                    'customerName': customerName,
+                    'productAmount': productAmount,
+                }]
+            }
+        )
+    else:
+        ledgerAppended = item[0]['ledgers']
+        ledgerToAdd = {
+            'index': count + 1,
+            'customerName': customerName,
+            'productAmount': productAmount,
+        }
+        ledgerAppended.append(ledgerToAdd)
+        ledger_table.update_item(
+            Key={
+                'userLedgerId': userId,
+            },
+            UpdateExpression='SET ledgers = :val1',
+            ExpressionAttributeValues={
+                ':val1': ledgerAppended
+            }
+        )
+
+    return jsonify({})
+
