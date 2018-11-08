@@ -993,7 +993,6 @@ def getLedgerList(userId):
     items = response['Items'][0]['activeLedgers']
     responseString = ''
     if len(items) == 0:
-        print("no list")
         return jsonify({
             "messages":[ {"text": "No list" }]
         })
@@ -1009,6 +1008,7 @@ def getLedgerList(userId):
 
 @app.route("/ledger/delete", methods=['POST'])
 def deleteLedger():
+    print(request.form)
     userId = request.form['messenger user id']
     indexToDelete = request.form['uioIndexToDelete']
     ledgerTable = dynamodb.Table(LEDGER_TABLE)
@@ -1035,7 +1035,9 @@ def deleteLedger():
         }
     )
 
-    return jsonify({})
+    return jsonify({
+        "messages":[ {"text": "Ledger deleted" }]
+    })
 
 
 ################# test source start ##########################
