@@ -536,6 +536,14 @@ def add_postfix_date(date):
 
     return ret_date
 
+def add_postfix_date_month(date):
+    this_month = datetime.today().strftime('%b')
+    postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
+
+    ret_date = add_postfix(date) + ' ' + this_month + '.'
+
+    return ret_date
+
 
 def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
                         uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
@@ -928,6 +936,113 @@ def get_weather(userId):
     }
     return jsonify(forecast_dict)
 
+@app.route("/ledger/add", methods=['POST'])
+def addLedger():
+    print(request.form)
+    userId = request.form['messenger user id']
+    customerName = request.form['uioCustomerName']
+    productAmount = request.form['uioProductAmount']
+
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    count = response['Count']
+    item = response['Items']
+    if count == 0:
+        ledgerTable.put_item(
+            Item={
+                'userLedgerId': userId,
+                'ledgers': [{
+                    'index': count + 1,
+                    'customerName': customerName,
+                    'productAmount': productAmount,
+                    'date': datetime.now().strftime('%Y%m%d'),
+                    'use': 'Y',
+                }]
+            }
+        )
+    else:
+        ledgerAppended = item[0]['ledgers']
+        ledgerToAdd = {
+            'index': count + 1,
+            'customerName': customerName,
+            'productAmount': productAmount,
+            'date': datetime.now().strftime('%Y%m%d'),
+            'use': 'Y',
+        }
+        ledgerAppended.append(ledgerToAdd)
+        ledgerTable.update_item(
+            Key={
+                'userLedgerId': userId,
+            },
+            UpdateExpression='SET ledgers = :val1',
+            ExpressionAttributeValues={
+                ':val1': ledgerAppended
+            }
+        )
+
+    return jsonify({})
+
+@app.route("/ledger/list/<string:userId>")
+def getLedgerList(userId):
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['ledgers']
+    responseString = ''
+    filteredList = []
+    for x in items:
+        if x['use'] == 'Y':
+            filteredList.append(x)
+    print(len(filteredList))
+    if len(filteredList) == 0:
+        print("no list")
+        return jsonify({
+            "messages":[ {"text": "No list" }]
+        })
+    for idx, x in enumerate(filteredList):
+        if x['use'] == 'Y':
+            responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix_date_month(x['date'])
+            responseString += '\nName: ' + x['customerName']
+            responseString += '\nProduct Amount: ' + x['productAmount']
+            responseString += '\n\n'
+
+    return jsonify({
+        "messages":[ {"text": responseString }]
+    })
+
+@app.route("/ledger/delete", methods=['POST'])
+def deleteLedger():
+    userId = request.form['messenger user id']
+    indexToDelete = request.form['uioIndexToDelete']
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['ledgers']
+    updatedList = []
+    for x in items:
+        if x['use'] == 'Y':
+            updatedList.append(x)
+    updatedList[int(indexToDelete) - 1]['use'] = 'N'
+
+    ledgerTable.update_item(
+        Key={
+            'userLedgerId': userId,
+        },
+        UpdateExpression='SET ledgers = :val1',
+        ExpressionAttributeValues={
+            ':val1': updatedList
+        }
+    )
+
+    return jsonify({})
+
 
 ################# test source start ##########################
 
@@ -1040,72 +1155,3 @@ def test_monthly_migrate(fromMonth, toMonth):
                 logger.info('keys not exist')
     
     return jsonify({})
-
-@app.route("/ledger/add", methods=['POST'])
-def addLedger():
-    userId = request.form['messenger user id']
-    customerName = request.form['uioCustomerName']
-    productAmount = request.form['uioProductName']
-
-    ledgerTable = dynamodb.Table(LEDGER_TABLE)
-
-    response = ledgerTable.query(
-        KeyConditionExpression=Key('userLedgerId').eq(userId)
-    )
-    count = response['Count']
-    item = response['Items']
-    if count == 0:
-        ledgerTable.put_item(
-            Item={
-                'userLedgerId': userId,
-                'ledgers': [{
-                    'index': count + 1,
-                    'customerName': customerName,
-                    'productAmount': productAmount,
-                    'date': datetime.now().strftime('%Y%m%d'),
-                    'use': 'Y',
-                }]
-            }
-        )
-    else:
-        ledgerAppended = item[0]['ledgers']
-        ledgerToAdd = {
-            'index': count + 1,
-            'customerName': customerName,
-            'productAmount': productAmount,
-            'date': datetime.now().strftime('%Y%m%d'),
-            'use': 'Y',
-        }
-        ledgerAppended.append(ledgerToAdd)
-        ledgerTable.update_item(
-            Key={
-                'userLedgerId': userId,
-            },
-            UpdateExpression='SET ledgers = :val1',
-            ExpressionAttributeValues={
-                ':val1': ledgerAppended
-            }
-        )
-
-    return jsonify({})
-
-@app.route("/ledger/list/<string:userId>")
-def getLedgerList(userId):
-    ledgerTable = dynamodb.Table(LEDGER_TABLE)
-
-    response = ledgerTable.query(
-        KeyConditionExpression=Key('userLedgerId').eq(userId)
-    )
-    items = response['Items'][0]['ledgers']
-    responseString = ''
-    for idx, x in enumerate(items):
-        print(x)
-        if x['use'] == 'Y':
-            responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix(x['date'])
-            responseString += '\nName: ' + x['customerName']
-            responseString += '\nProduct Amount: ' + x['productAmount']
-            responseString += '\n\n'
-
-    return jsonify({
-        "messages":[ {"text": responseString }]
-    })
