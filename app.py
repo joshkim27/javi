@@ -1041,7 +1041,7 @@ def test_monthly_migrate(fromMonth, toMonth):
     
     return jsonify({})
 
-@app.route("/ledger/add")
+@app.route("/ledger/add", methods=['POST'])
 def addLedger():
     userId = request.form['messenger user id']
     customerName = request.form['uioCustomerName']
