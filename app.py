@@ -954,30 +954,28 @@ def addLedger():
         ledgerTable.put_item(
             Item={
                 'userLedgerId': userId,
-                'ledgers': [{
+                'activeLedgers': [{
                     'index': count + 1,
                     'customerName': customerName,
                     'productAmount': productAmount,
                     'date': datetime.now().strftime('%Y%m%d'),
-                    'use': 'Y',
                 }]
             }
         )
     else:
-        ledgerAppended = item[0]['ledgers']
+        ledgerAppended = item[0]['activeLedgers']
         ledgerToAdd = {
             'index': count + 1,
             'customerName': customerName,
             'productAmount': productAmount,
             'date': datetime.now().strftime('%Y%m%d'),
-            'use': 'Y',
         }
         ledgerAppended.append(ledgerToAdd)
         ledgerTable.update_item(
             Key={
                 'userLedgerId': userId,
             },
-            UpdateExpression='SET ledgers = :val1',
+            UpdateExpression='SET activeLedgers = :val1',
             ExpressionAttributeValues={
                 ':val1': ledgerAppended
             }
@@ -992,24 +990,18 @@ def getLedgerList(userId):
     response = ledgerTable.query(
         KeyConditionExpression=Key('userLedgerId').eq(userId)
     )
-    items = response['Items'][0]['ledgers']
+    items = response['Items'][0]['activeLedgers']
     responseString = ''
-    filteredList = []
-    for x in items:
-        if x['use'] == 'Y':
-            filteredList.append(x)
-    print(len(filteredList))
-    if len(filteredList) == 0:
+    if len(items) == 0:
         print("no list")
         return jsonify({
             "messages":[ {"text": "No list" }]
         })
-    for idx, x in enumerate(filteredList):
-        if x['use'] == 'Y':
-            responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix_date_month(x['date'])
-            responseString += '\nName: ' + x['customerName']
-            responseString += '\nProduct Amount: ' + x['productAmount']
-            responseString += '\n\n'
+    for idx, x in enumerate(items):
+        responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix_date_month(x['date'])
+        responseString += '\nName: ' + x['customerName']
+        responseString += '\nProduct Amount: ' + x['productAmount']
+        responseString += '\n\n'
 
     return jsonify({
         "messages":[ {"text": responseString }]
@@ -1024,20 +1016,22 @@ def deleteLedger():
     response = ledgerTable.query(
         KeyConditionExpression=Key('userLedgerId').eq(userId)
     )
-    items = response['Items'][0]['ledgers']
-    updatedList = []
-    for x in items:
-        if x['use'] == 'Y':
-            updatedList.append(x)
-    updatedList[int(indexToDelete) - 1]['use'] = 'N'
+    activeLedgers = response['Items'][0]['activeLedgers']
+    inactiveLedgers = []
+    if 'inactiveLedgers' in response['Items'][0]:
+        inactiveLedgers = response['Items'][0]['inactiveLedgers']
+    
+    inactiveLedgers.append(activeLedgers[int(indexToDelete) - 1])
+    del(activeLedgers[int(indexToDelete) - 1])
 
     ledgerTable.update_item(
         Key={
             'userLedgerId': userId,
         },
-        UpdateExpression='SET ledgers = :val1',
+        UpdateExpression='SET activeLedgers = :val1, inactiveLedgers = :val2',
         ExpressionAttributeValues={
-            ':val1': updatedList
+            ':val1': activeLedgers,
+            ':val2': inactiveLedgers,
         }
     )
 
