@@ -1041,23 +1041,25 @@ def test_monthly_migrate(fromMonth, toMonth):
     
     return jsonify({})
 
-@app.route("/test/ledger/add/<string:userId>/<string:customerName>/<string:productAmount>")
+@app.route("/ledger/add/<string:userId>/<string:customerName>/<string:productAmount>")
 def addLedger(userId, customerName, productAmount):
-    ledger_table = dynamodb.Table(LEDGER_TABLE)
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
 
-    response = ledger_table.query(
+    response = ledgerTable.query(
         KeyConditionExpression=Key('userLedgerId').eq(userId)
     )
     count = response['Count']
     item = response['Items']
     if count == 0:
-        ledger_table.put_item(
+        ledgerTable.put_item(
             Item={
                 'userLedgerId': userId,
                 'ledgers': [{
                     'index': count + 1,
                     'customerName': customerName,
                     'productAmount': productAmount,
+                    'date': datetime.now().strftime('%Y%m%d'),
+                    'use': 'Y',
                 }]
             }
         )
@@ -1067,9 +1069,11 @@ def addLedger(userId, customerName, productAmount):
             'index': count + 1,
             'customerName': customerName,
             'productAmount': productAmount,
+            'date': datetime.now().strftime('%Y%m%d'),
+            'use': 'Y',
         }
         ledgerAppended.append(ledgerToAdd)
-        ledger_table.update_item(
+        ledgerTable.update_item(
             Key={
                 'userLedgerId': userId,
             },
@@ -1081,3 +1085,23 @@ def addLedger(userId, customerName, productAmount):
 
     return jsonify({})
 
+@app.route("/ledger/list/<string:userId>")
+def getLedgerList(userId):
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['ledgers']
+    responseString = ''
+    for idx, x in enumerate(items):
+        print(x)
+        if x['use'] == 'Y':
+            responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix(x['date'])
+            responseString += '\nName: ' + x['customerName']
+            responseString += '\nProduct Amount: ' + x['productAmount']
+            responseString += '\n\n'
+
+    return jsonify({
+        "messages":[ {"text": responseString }]
+    })
