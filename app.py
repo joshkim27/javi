@@ -10,7 +10,7 @@ import logging.handlers
 from datetime import datetime, timedelta, date
 from flask import Flask, jsonify, request
 from dateutil.relativedelta import relativedelta
-from calendar import monthrange
+from calendar import monthrange, monthcalendar
 from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
@@ -1151,3 +1151,126 @@ def test_monthly_migrate(fromMonth, toMonth):
                 logger.info('keys not exist')
     
     return jsonify({})
+
+
+# dynamodb resource 를 이용한 데일리 업데이트
+def put_daily2(userId, uimDailySales, uimDailyBuying, todayDate):
+    today = todayDate.strftime('%Y%m%d')
+    userDailyId = userId + today
+
+    isExist = False
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    resp = daily_table.get_item(
+        Key={'userDailyId':userDailyId}
+    )
+
+    item = resp.get('Item')
+    if item:
+        isExist = True
+
+    daily_table.put_item(
+        Item={
+            'userDailyId': userDailyId,
+            'uimDailySales': uimDailySales,
+            'uimDailyBuying': uimDailyBuying,
+            'created_at': datetime.utcnow().isoformat()
+        }
+    )
+
+    return isExist
+
+
+@app.route("/monthly/thismonth/<string:userId>")
+def get_montly_report(userId):
+    now = datetime.now()
+    today = now.strftime('%Y%m%d')
+    this_month = now.strftime(('%Y%m'))
+    this_month_text = now.strftime('%b')
+    start_date_month = this_month + '01'
+    # weekday = datetime.now().weekday()
+    # cvWeek = 'W' + datetime.now().strftime('%W')
+    dates = monthcalendar(int(now.strftime('%Y')), int(now.strftime('%m')))
+    message = now.strftime('%b') + ' Sales Report\n' + add_postfix(start_date_month[6:]) + \
+              ' ' + this_month_text + ' ~ ' + add_postfix(today[6:8]) + ' ' + this_month_text + '\n' +\
+              'Week \n : Buying | Sales | Profit\n'
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    fe = Key('userDailyId').between(userId + start_date_month, userId + today)
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+    temp = {}
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    logger.debug(temp)
+
+    total_sales = 0
+    total_buying = 0
+
+    for week_days in dates:
+        logger.debug(week_days)
+        sum_sales = 0
+        sum_buying = 0
+        lastday_of_week = 0
+        uncountable_days = 0
+
+
+        for day in week_days :
+            logger.debug(day)
+            if day == 0:
+                uncountable_days = uncountable_days + 1
+            elif day < 10:
+                daily_id = userId + this_month + '0' + str(day)
+                lastday_of_week = day
+            else:
+                daily_id = userId + this_month + str(day)
+                lastday_of_week = day
+
+            if day > 0 and (daily_id in temp):
+
+                add_sales = temp[daily_id][0]
+                add_buying = temp[daily_id][1]
+            else:
+                add_sales = 0
+                add_buying = 0
+
+            sum_sales = sum_sales + add_sales
+            sum_buying = sum_buying + add_buying
+
+        text_week = 'W' + (now.replace(day=lastday_of_week)).strftime('%W')
+        if uncountable_days > 0 :
+            text_week = text_week + '(%ddays)'%(7-uncountable_days) + '\n'
+        message = message + text_week + ' :%10d | %10d | %10d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
+
+        total_sales = total_sales + sum_sales
+        total_buying = total_buying + sum_buying
+
+        logger.debug(message)
+    message = message + '\n' + this_month_text + '\n' + \
+              ' :%10d | %10d | %10d'%(total_sales, total_buying, (total_sales - total_buying)) + \
+              'Net Profit\n= Profit - Monthly Cost\n\n'
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    fe = Key('userMonthlyId').eq(userId + this_month)
+    res = monthly_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(res)
+
+    item_monthly = res.get('Items')[0]
+    if not item_monthly:
+        total_cost = 0
+    else:
+        total_cost = item_monthly.get('uioRentalAmount') + item_monthly.get('uioEmployeeAmount') + item_monthly.get('uioOtherCost')
+
+    message = message + '%10drs\n=%10d - %10d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
+
+    return jsonify({
+        "messages":[{"text": message}]
+    })
