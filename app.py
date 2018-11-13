@@ -1006,9 +1006,33 @@ def getLedgerList(userId):
         "messages":[ {"text": responseString }]
     })
 
+@app.route("/ledger/<string:userId>/<string:ledgerIndex>")
+def getLedger(userId, ledgerIndex):
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['activeLedgers']
+    responseString = ''
+    if len(items) == 0:
+        return jsonify({
+            "messages":[ {"text": "No list" }]
+        })
+
+    item = items[int(ledgerIndex) - 1]
+
+    responseString +='#' + ledgerIndex + ' Date: ' + add_postfix_date_month(item['date'])
+    responseString += '\nName: ' + item['customerName']
+    responseString += '\nProduct Amount: ' + item['productAmount']
+    responseString += '\n\n'
+
+    return jsonify({
+        "messages":[ {"text": responseString }]
+    })
+
 @app.route("/ledger/delete", methods=['POST'])
 def deleteLedger():
-    print(request.form)
     userId = request.form['messenger user id']
     indexToDelete = request.form['uioIndexToDelete']
     ledgerTable = dynamodb.Table(LEDGER_TABLE)
@@ -1037,6 +1061,33 @@ def deleteLedger():
 
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
+    })
+
+@app.route("/ledger/edit", methods=['POST'])
+def editLedger():
+    userId = request.form['messenger user id']
+    indexToEdit = request.form['uioIndexToEdit']
+    ledgerEditAmount = request.form['uioLedgerEditAmount']
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    activeLedgers = response['Items'][0]['activeLedgers']
+    selectedLedger = activeLedgers[int(indexToEdit) - 1]
+    updateExpression = 'SET activeLedgers[' + str((int(indexToEdit) - 1)) + '].productAmount = :val1'
+    ledgerTable.update_item(
+        Key={
+            'userLedgerId': userId,
+        },
+        UpdateExpression=updateExpression,
+        ExpressionAttributeValues={
+            ':val1': ledgerEditAmount
+        }
+    )
+    
+    return jsonify({
+        "messages":[ {"text": "ledger updated" }]
     })
 
 
