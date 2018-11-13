@@ -1240,8 +1240,7 @@ def get_montly_report(userId):
     this_month = now.strftime(('%Y%m'))
     this_month_text = now.strftime('%b')
     start_date_month = this_month + '01'
-    # weekday = datetime.now().weekday()
-    # cvWeek = 'W' + datetime.now().strftime('%W')
+
     dates = monthcalendar(int(now.strftime('%Y')), int(now.strftime('%m')))
     message = now.strftime('%b') + ' Sales Report\n' + add_postfix(start_date_month[6:]) + \
               ' ' + this_month_text + ' ~ ' + add_postfix(today[6:8]) + ' ' + this_month_text + '\n' +\
@@ -1253,6 +1252,8 @@ def get_montly_report(userId):
     response = daily_table.scan(
         FilterExpression=fe,
     )
+
+    # 검색 처리를 위한 딕셔너리 처리
     temp = {}
     for i in response['Items']:
         logger.debug(i)
