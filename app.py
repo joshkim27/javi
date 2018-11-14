@@ -1232,10 +1232,25 @@ def put_daily2(userId, uimDailySales, uimDailyBuying, todayDate):
 
     return isExist
 
-
-@app.route("/monthly/thismonth/<string:userId>")
-def get_montly_report(userId):
+@app.route("/monthly/this/<string:userId>")
+def get_this_montly_report(userId):
     now = datetime.now()
+    return jsonify({
+        "messages":[{"text": get_montly_report(userId,now)}]
+    })
+
+
+@app.route("/monthly/previous/<string:userId>")
+def get_previous_montly_report(userId):
+    now = datetime.now() - relativedelta(months=1)
+    now = now.replace(day=(monthrange(int(now.strftime('%Y')), int(now.strftime('%m')))[1]))
+    return jsonify({
+        "messages":[{"text": get_montly_report(userId,now)}]
+    })
+
+
+def get_montly_report(userId, now):
+
     today = now.strftime('%Y%m%d')
     this_month = now.strftime(('%Y%m'))
     this_month_text = now.strftime('%b')
@@ -1244,7 +1259,7 @@ def get_montly_report(userId):
     dates = monthcalendar(int(now.strftime('%Y')), int(now.strftime('%m')))
     message = now.strftime('%b') + ' Sales Report\n' + add_postfix(start_date_month[6:]) + \
               ' ' + this_month_text + ' ~ ' + add_postfix(today[6:8]) + ' ' + this_month_text + '\n' +\
-              'Week \n : Buying | Sales | Profit\n'
+              '\nWeek \n : Buying | Sales | Profit\n'
 
     daily_table = dynamodb.Table(DAILY_TABLE)
 
@@ -1298,14 +1313,14 @@ def get_montly_report(userId):
 
         text_week = text_week + '\n'
 
-        message = message + text_week + ' :%10d | %10d | %10d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
+        message = message + text_week + ' :%6d | %6d | %6d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
 
         total_sales = total_sales + sum_sales
         total_buying = total_buying + sum_buying
 
         logger.debug(message)
     message = message + '\n' + this_month_text + '\n' + \
-              ' :%10d | %10d | %10d'%(total_sales, total_buying, (total_sales - total_buying)) + \
+              ' :%6d | %6d | %6d'%(total_sales, total_buying, (total_sales - total_buying)) + \
               '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
     monthly_table = dynamodb.Table(MONTHLY_TABLE)
 
@@ -1316,16 +1331,14 @@ def get_montly_report(userId):
 
     logger.debug(res)
 
-    item_monthly = res.get('Items')[0]
+    item_monthly = res.get('Items')
     if not item_monthly:
         total_cost = 0
     else:
-        total_cost = item_monthly.get('uioRentalAmount') + item_monthly.get('uioEmployeeAmount') + item_monthly.get('uioOtherCost')
+        total_cost = item_monthly[0].get('uioRentalAmount') + item_monthly[0].get('uioEmployeeAmount') + item_monthly[0].get('uioOtherCost')
 
     message = message + '%drs\n= %d - %d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
 
     logger.debug(message)
 
-    return jsonify({
-        "messages":[{"text": message}]
-    })
+    return message
