@@ -10,7 +10,7 @@ import logging.handlers
 from datetime import datetime, timedelta, date
 from flask import Flask, jsonify, request
 from dateutil.relativedelta import relativedelta
-from calendar import monthrange
+from calendar import monthrange, monthcalendar
 from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
@@ -30,6 +30,7 @@ WEEKLY_TABLE = os.environ['JAVI_WEEKLY_TABLE']
 MONTHLY_TABLE = os.environ['JAVI_MONTHLY_TABLE']
 YEARLY_TABLE = os.environ['JAVI_YEARLY_TABLE']
 CONFIG_TABLE = os.environ['JAVI_CONFIG_TABLE']
+LEDGER_TABLE = os.environ['JAVI_LEDGER_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
 
@@ -535,6 +536,14 @@ def add_postfix_date(date):
 
     return ret_date
 
+def add_postfix_date_month(date):
+    this_month = datetime.today().strftime('%b')
+    postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
+
+    ret_date = add_postfix(date) + ' ' + this_month + '.'
+
+    return ret_date
+
 
 def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
                         uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
@@ -927,6 +936,160 @@ def get_weather(userId):
     }
     return jsonify(forecast_dict)
 
+@app.route("/ledger/add", methods=['POST'])
+def addLedger():
+    print(request.form)
+    userId = request.form['messenger user id']
+    customerName = request.form['uioCustomerName']
+    productAmount = request.form['uioProductAmount']
+
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    count = response['Count']
+    item = response['Items']
+    if count == 0:
+        ledgerTable.put_item(
+            Item={
+                'userLedgerId': userId,
+                'activeLedgers': [{
+                    'index': count + 1,
+                    'customerName': customerName,
+                    'productAmount': productAmount,
+                    'date': datetime.now().strftime('%Y%m%d'),
+                }]
+            }
+        )
+    else:
+        ledgerAppended = item[0]['activeLedgers']
+        ledgerToAdd = {
+            'index': count + 1,
+            'customerName': customerName,
+            'productAmount': productAmount,
+            'date': datetime.now().strftime('%Y%m%d'),
+        }
+        ledgerAppended.append(ledgerToAdd)
+        ledgerTable.update_item(
+            Key={
+                'userLedgerId': userId,
+            },
+            UpdateExpression='SET activeLedgers = :val1',
+            ExpressionAttributeValues={
+                ':val1': ledgerAppended
+            }
+        )
+
+    return jsonify({})
+
+@app.route("/ledger/list/<string:userId>")
+def getLedgerList(userId):
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['activeLedgers']
+    responseString = ''
+    if len(items) == 0:
+        return jsonify({
+            "messages":[ {"text": "No list" }]
+        })
+    for idx, x in enumerate(items):
+        responseString +='#' + str(idx + 1) + ' Date: ' + add_postfix_date_month(x['date'])
+        responseString += '\nName: ' + x['customerName']
+        responseString += '\nProduct Amount: ' + x['productAmount']
+        responseString += '\n\n'
+
+    return jsonify({
+        "messages":[ {"text": responseString }]
+    })
+
+@app.route("/ledger/<string:userId>/<string:ledgerIndex>")
+def getLedger(userId, ledgerIndex):
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    items = response['Items'][0]['activeLedgers']
+    responseString = ''
+    if len(items) == 0:
+        return jsonify({
+            "messages":[ {"text": "No list" }]
+        })
+
+    item = items[int(ledgerIndex) - 1]
+
+    responseString +='#' + ledgerIndex + ' Date: ' + add_postfix_date_month(item['date'])
+    responseString += '\nName: ' + item['customerName']
+    responseString += '\nProduct Amount: ' + item['productAmount']
+    responseString += '\n\n'
+
+    return jsonify({
+        "messages":[ {"text": responseString }]
+    })
+
+@app.route("/ledger/delete", methods=['POST'])
+def deleteLedger():
+    userId = request.form['messenger user id']
+    indexToDelete = request.form['uioIndexToDelete']
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    activeLedgers = response['Items'][0]['activeLedgers']
+    inactiveLedgers = []
+    if 'inactiveLedgers' in response['Items'][0]:
+        inactiveLedgers = response['Items'][0]['inactiveLedgers']
+    
+    inactiveLedgers.append(activeLedgers[int(indexToDelete) - 1])
+    del(activeLedgers[int(indexToDelete) - 1])
+
+    ledgerTable.update_item(
+        Key={
+            'userLedgerId': userId,
+        },
+        UpdateExpression='SET activeLedgers = :val1, inactiveLedgers = :val2',
+        ExpressionAttributeValues={
+            ':val1': activeLedgers,
+            ':val2': inactiveLedgers,
+        }
+    )
+
+    return jsonify({
+        "messages":[ {"text": "Ledger deleted" }]
+    })
+
+@app.route("/ledger/edit", methods=['POST'])
+def editLedger():
+    userId = request.form['messenger user id']
+    indexToEdit = request.form['uioIndexToEdit']
+    ledgerEditAmount = request.form['uioLedgerEditAmount']
+    ledgerTable = dynamodb.Table(LEDGER_TABLE)
+
+    response = ledgerTable.query(
+        KeyConditionExpression=Key('userLedgerId').eq(userId)
+    )
+    activeLedgers = response['Items'][0]['activeLedgers']
+    selectedLedger = activeLedgers[int(indexToEdit) - 1]
+    updateExpression = 'SET activeLedgers[' + str((int(indexToEdit) - 1)) + '].productAmount = :val1'
+    ledgerTable.update_item(
+        Key={
+            'userLedgerId': userId,
+        },
+        UpdateExpression=updateExpression,
+        ExpressionAttributeValues={
+            ':val1': ledgerEditAmount
+        }
+    )
+    
+    return jsonify({
+        "messages":[ {"text": "ledger updated" }]
+    })
+
 
 ################# test source start ##########################
 
@@ -1039,3 +1202,143 @@ def test_monthly_migrate(fromMonth, toMonth):
                 logger.info('keys not exist')
     
     return jsonify({})
+
+
+# dynamodb resource 를 이용한 데일리 업데이트
+def put_daily2(userId, uimDailySales, uimDailyBuying, todayDate):
+    today = todayDate.strftime('%Y%m%d')
+    userDailyId = userId + today
+
+    isExist = False
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    resp = daily_table.get_item(
+        Key={'userDailyId':userDailyId}
+    )
+
+    item = resp.get('Item')
+    if item:
+        isExist = True
+
+    daily_table.put_item(
+        Item={
+            'userDailyId': userDailyId,
+            'uimDailySales': uimDailySales,
+            'uimDailyBuying': uimDailyBuying,
+            'created_at': datetime.utcnow().isoformat()
+        }
+    )
+
+    return isExist
+
+@app.route("/monthly/this/<string:userId>")
+def get_this_montly_report(userId):
+    now = datetime.now()
+    return jsonify({
+        "messages":[{"text": get_montly_report(userId,now)}]
+    })
+
+
+@app.route("/monthly/previous/<string:userId>")
+def get_previous_montly_report(userId):
+    now = datetime.now() - relativedelta(months=1)
+    now = now.replace(day=(monthrange(int(now.strftime('%Y')), int(now.strftime('%m')))[1]))
+    return jsonify({
+        "messages":[{"text": get_montly_report(userId,now)}]
+    })
+
+
+def get_montly_report(userId, now):
+
+    today = now.strftime('%Y%m%d')
+    this_month = now.strftime(('%Y%m'))
+    this_month_text = now.strftime('%b')
+    start_date_month = this_month + '01'
+
+    dates = monthcalendar(int(now.strftime('%Y')), int(now.strftime('%m')))
+    message = now.strftime('%b') + ' Sales Report\n' + add_postfix(start_date_month[6:]) + \
+              ' ' + this_month_text + ' ~ ' + add_postfix(today[6:8]) + ' ' + this_month_text + '\n' +\
+              '\nWeek \n : Buying | Sales | Profit\n'
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    fe = Key('userDailyId').between(userId + start_date_month, userId + today)
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+    temp = {}
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    logger.debug(temp)
+
+    total_sales = 0
+    total_buying = 0
+
+    for week_days in dates:
+        logger.debug(week_days)
+        sum_sales = 0
+        sum_buying = 0
+        lastday_of_week = 0
+        uncountable_days = 0
+
+
+        for day in week_days :
+            logger.debug(day)
+            if day == 0:
+                uncountable_days = uncountable_days + 1
+            elif day < 10:
+                daily_id = userId + this_month + '0' + str(day)
+                lastday_of_week = day
+            else:
+                daily_id = userId + this_month + str(day)
+                lastday_of_week = day
+
+            if day > 0 and (daily_id in temp):
+
+                add_sales = temp[daily_id][0]
+                add_buying = temp[daily_id][1]
+            else:
+                add_sales = 0
+                add_buying = 0
+
+            sum_sales = sum_sales + add_sales
+            sum_buying = sum_buying + add_buying
+
+        text_week = 'W' + (now.replace(day=lastday_of_week)).strftime('%W')
+        if uncountable_days > 0 :
+            text_week = text_week + '(%ddays)'%(7-uncountable_days)
+
+        text_week = text_week + '\n'
+
+        message = message + text_week + ' :%6d | %6d | %6d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
+
+        total_sales = total_sales + sum_sales
+        total_buying = total_buying + sum_buying
+
+        logger.debug(message)
+    message = message + '\n' + this_month_text + '\n' + \
+              ' :%6d | %6d | %6d'%(total_sales, total_buying, (total_sales - total_buying)) + \
+              '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    fe = Key('userMonthlyId').eq(userId + this_month)
+    res = monthly_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(res)
+
+    item_monthly = res.get('Items')
+    if not item_monthly:
+        total_cost = 0
+    else:
+        total_cost = item_monthly[0].get('uioRentalAmount') + item_monthly[0].get('uioEmployeeAmount') + item_monthly[0].get('uioOtherCost')
+
+    message = message + '%drs\n= %d - %d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
+
+    logger.debug(message)
+
+    return message
