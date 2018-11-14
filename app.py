@@ -1252,8 +1252,6 @@ def get_montly_report(userId):
     response = daily_table.scan(
         FilterExpression=fe,
     )
-
-    # 검색 처리를 위한 딕셔너리 처리
     temp = {}
     for i in response['Items']:
         logger.debug(i)
@@ -1296,10 +1294,10 @@ def get_montly_report(userId):
 
         text_week = 'W' + (now.replace(day=lastday_of_week)).strftime('%W')
         if uncountable_days > 0 :
-            text_week = text_week + '(%ddays)' % (7 - uncountable_days)
+            text_week = text_week + '(%ddays)'%(7-uncountable_days)
 
         text_week = text_week + '\n'
-        
+
         message = message + text_week + ' :%10d | %10d | %10d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
 
         total_sales = total_sales + sum_sales
@@ -1308,7 +1306,7 @@ def get_montly_report(userId):
         logger.debug(message)
     message = message + '\n' + this_month_text + '\n' + \
               ' :%10d | %10d | %10d'%(total_sales, total_buying, (total_sales - total_buying)) + \
-              'Net Profit\n= Profit - Monthly Cost\n\n'
+              '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
     monthly_table = dynamodb.Table(MONTHLY_TABLE)
 
     fe = Key('userMonthlyId').eq(userId + this_month)
@@ -1324,7 +1322,9 @@ def get_montly_report(userId):
     else:
         total_cost = item_monthly.get('uioRentalAmount') + item_monthly.get('uioEmployeeAmount') + item_monthly.get('uioOtherCost')
 
-    message = message + '%10drs\n=%10d - %10d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
+    message = message + '%drs\n= %d - %d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
+
+    logger.debug(message)
 
     return jsonify({
         "messages":[{"text": message}]
