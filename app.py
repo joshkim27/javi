@@ -1296,7 +1296,10 @@ def get_montly_report(userId):
 
         text_week = 'W' + (now.replace(day=lastday_of_week)).strftime('%W')
         if uncountable_days > 0 :
-            text_week = text_week + '(%ddays)'%(7-uncountable_days) + '\n'
+            text_week = text_week + '(%ddays)' % (7 - uncountable_days)
+
+        text_week = text_week + '\n'
+        
         message = message + text_week + ' :%10d | %10d | %10d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
 
         total_sales = total_sales + sum_sales
