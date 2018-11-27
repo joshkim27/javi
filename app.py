@@ -1342,3 +1342,21 @@ def get_montly_report(userId, now):
     logger.debug(message)
 
     return message
+
+@app.route("/daily/<string:update_date>", methods=['POST'])
+def update_daily(update_date):
+    userId = request.form['messenger user id']
+    if not userId:
+        return jsonify({'error': 'Please provider userId'}), 400
+
+    uimDailySales = request.form['uimDailySales']
+    uimDailyBuying = request.form['uimDailyBuying']
+
+    logger.info('daily_input|' + userId + '|' + uimDailySales + '|' + uimDailyBuying)
+
+    put_daily(userId, uimDailySales, uimDailyBuying, datetime.strptime(update_date,'%Y%m%d'))
+
+    # 일입력 체크
+    update_dailyInputCheck(userId, True)
+
+    return jsonify({})
