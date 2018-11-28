@@ -981,6 +981,8 @@ def addLedger():
             }
         )
 
+    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
+
     return jsonify({})
 
 @app.route("/ledger/list/<string:userId>")
@@ -1059,6 +1061,8 @@ def deleteLedger():
         }
     )
 
+    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
+
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
     })
@@ -1085,11 +1089,42 @@ def editLedger():
             ':val1': ledgerEditAmount
         }
     )
+
+    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
     
     return jsonify({
         "messages":[ {"text": "ledger updated" }]
     })
 
+def accumulate_statistics(date, key):
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    response = configTable.query(
+        KeyConditionExpression=Key('configKey').eq('statistics')
+    )
+    statisticsDict = {}
+    print(response['Items'][0]['statistics'])
+    if date not in response['Items'][0]['statistics'].keys():
+        # 날짜 데이터 생성
+        statisticsDict = {date: [{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}
+    else:
+        statisticsDict = response['Items'][0]['statistics'][date]
+        # 기존 데이터 가져오기
+    
+    for index, item in enumerate(statisticsDict[date]):
+        if key in item:
+            statisticsDict[date][index][key] = statisticsDict[date][index][key] + 1
+            break
+
+    
+    configTable.update_item(
+        Key={
+            'configKey': 'statistics'
+        },
+        UpdateExpression='SET statistics = :val1',
+        ExpressionAttributeValues={
+            ':val1': statisticsDict
+        }
+    )
 
 ################# test source start ##########################
 
@@ -1111,6 +1146,19 @@ def editLedger():
 #                 'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
 #             }
 #         )
+    
+
+@app.route("/test/statistics")
+def test_statistics():
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    emptyArray = {'20181128':[{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}
+
+    configTable.put_item(
+        Item={
+            'configKey': 'statistics',
+            'statistics': emptyArray
+        }
+    )
 
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>",
            methods=['GET'])
