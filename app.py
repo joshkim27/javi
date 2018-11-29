@@ -981,7 +981,7 @@ def addLedger():
             }
         )
 
-    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
 
     return jsonify({})
 
@@ -1061,7 +1061,7 @@ def deleteLedger():
         }
     )
 
-    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
 
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
@@ -1090,29 +1090,30 @@ def editLedger():
         }
     )
 
-    accumulate_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
-    
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
+
     return jsonify({
         "messages":[ {"text": "ledger updated" }]
     })
 
-def accumulate_statistics(date, key):
+def update_statistics(date, key):
     configTable = dynamodb.Table(CONFIG_TABLE)
     response = configTable.query(
         KeyConditionExpression=Key('configKey').eq('statistics')
     )
-    statisticsDict = {}
-    print(response['Items'][0]['statistics'])
-    if date not in response['Items'][0]['statistics'].keys():
-        # 날짜 데이터 생성
-        statisticsDict = {date: [{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}
-    else:
-        statisticsDict = response['Items'][0]['statistics'][date]
-        # 기존 데이터 가져오기
-    
-    for index, item in enumerate(statisticsDict[date]):
-        if key in item:
-            statisticsDict[date][index][key] = statisticsDict[date][index][key] + 1
+    statisticsList = response['Items'][0]['statistics']
+    updatedstatisticsList = statisticsList
+    # 날짜 탐색하면서 데이터 있는지 확인
+    for index, item in enumerate(statisticsList):
+        if date in item:
+            # 기존 날짜 존재
+            updatedStatisticsItemList = accumulate_statistics(item[date], key)
+            updatedstatisticsList[index] = {date: updatedStatisticsItemList}
+            break
+        else:
+            # 날짜 데이터 없음 생성 하기
+            newStatisticsItemList = accumulate_statistics([{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ], key)
+            updatedstatisticsList.append({date: newStatisticsItemList})
             break
 
     
@@ -1122,9 +1123,16 @@ def accumulate_statistics(date, key):
         },
         UpdateExpression='SET statistics = :val1',
         ExpressionAttributeValues={
-            ':val1': statisticsDict
+            ':val1': updatedstatisticsList
         }
     )
+    return jsonify()
+
+def accumulate_statistics(dict, keyToUpdate):
+    for index, item in enumerate(dict):
+        if keyToUpdate in item:
+            dict[index][keyToUpdate] = dict[index][keyToUpdate] + 1
+            return dict
 
 ################# test source start ##########################
 
@@ -1151,7 +1159,7 @@ def accumulate_statistics(date, key):
 @app.route("/test/statistics")
 def test_statistics():
     configTable = dynamodb.Table(CONFIG_TABLE)
-    emptyArray = {'20181128':[{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}
+    emptyArray = [{'20181128':[{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}]
 
     configTable.put_item(
         Item={
