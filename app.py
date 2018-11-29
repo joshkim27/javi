@@ -981,6 +981,8 @@ def addLedger():
             }
         )
 
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
+
     return jsonify({})
 
 @app.route("/ledger/list/<string:userId>")
@@ -1059,6 +1061,8 @@ def deleteLedger():
         }
     )
 
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
+
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
     })
@@ -1085,11 +1089,50 @@ def editLedger():
             ':val1': ledgerEditAmount
         }
     )
-    
+
+    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
+
     return jsonify({
         "messages":[ {"text": "ledger updated" }]
     })
 
+def update_statistics(date, key):
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    response = configTable.query(
+        KeyConditionExpression=Key('configKey').eq('statistics')
+    )
+    statisticsList = response['Items'][0]['statistics']
+    updatedstatisticsList = statisticsList
+    # 날짜 탐색하면서 데이터 있는지 확인
+    for index, item in enumerate(statisticsList):
+        if date in item:
+            # 기존 날짜 존재
+            updatedStatisticsItemList = accumulate_statistics(item[date], key)
+            updatedstatisticsList[index] = {date: updatedStatisticsItemList}
+            break
+        else:
+            # 날짜 데이터 없음 생성 하기
+            newStatisticsItemList = accumulate_statistics([{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ], key)
+            updatedstatisticsList.append({date: newStatisticsItemList})
+            break
+
+    
+    configTable.update_item(
+        Key={
+            'configKey': 'statistics'
+        },
+        UpdateExpression='SET statistics = :val1',
+        ExpressionAttributeValues={
+            ':val1': updatedstatisticsList
+        }
+    )
+    return jsonify()
+
+def accumulate_statistics(dict, keyToUpdate):
+    for index, item in enumerate(dict):
+        if keyToUpdate in item:
+            dict[index][keyToUpdate] = dict[index][keyToUpdate] + 1
+            return dict
 
 ################# test source start ##########################
 
@@ -1111,6 +1154,19 @@ def editLedger():
 #                 'dailyInputCheck': {'Value': {'BOOL': False}, 'Action': 'PUT'}
 #             }
 #         )
+    
+
+@app.route("/test/statistics")
+def test_statistics():
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    emptyArray = [{'20181128':[{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ]}]
+
+    configTable.put_item(
+        Item={
+            'configKey': 'statistics',
+            'statistics': emptyArray
+        }
+    )
 
 @app.route("/test/daily/<string:userId>/<string:uimDailySales>/<string:uimDailyBuying>/<string:testDate>",
            methods=['GET'])
@@ -1342,3 +1398,21 @@ def get_montly_report(userId, now):
     logger.debug(message)
 
     return message
+
+@app.route("/daily/<string:update_date>", methods=['POST'])
+def update_daily(update_date):
+    userId = request.form['messenger user id']
+    if not userId:
+        return jsonify({'error': 'Please provider userId'}), 400
+
+    uimDailySales = request.form['uimDailySales']
+    uimDailyBuying = request.form['uimDailyBuying']
+
+    logger.info('daily_input|' + userId + '|' + uimDailySales + '|' + uimDailyBuying)
+
+    put_daily(userId, uimDailySales, uimDailyBuying, datetime.strptime(update_date,'%Y%m%d'))
+
+    # 일입력 체크
+    update_dailyInputCheck(userId, True)
+
+    return jsonify({})
