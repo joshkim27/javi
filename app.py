@@ -1104,18 +1104,23 @@ def update_statistics(date, key):
     statisticsList = response['Items'][0]['statistics']
     updatedstatisticsList = statisticsList
     # 날짜 탐색하면서 데이터 있는지 확인
+    isExist = False
     for index, item in enumerate(statisticsList):
+        print(item)
         if date in item:
             # 기존 날짜 존재
             updatedStatisticsItemList = accumulate_statistics(item[date], key)
             updatedstatisticsList[index] = {date: updatedStatisticsItemList}
+            isExist = True
             break
-        else:
-            # 날짜 데이터 없음 생성 하기
-            newStatisticsItemList = accumulate_statistics([{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ], key)
-            updatedstatisticsList.append({date: newStatisticsItemList})
-            break
+        
+    # 날짜 데이터 없음 생성 하기
+    if not isExist:
+        newStatisticsItemList = accumulate_statistics([{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ], key)
+        updatedstatisticsList.append({date: newStatisticsItemList})
 
+    print(statisticsList)
+    print(updatedstatisticsList)
     
     configTable.update_item(
         Key={
