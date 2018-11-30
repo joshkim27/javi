@@ -1118,10 +1118,8 @@ def update_statistics(date, key):
     if not isExist:
         newStatisticsItemList = accumulate_statistics([{'ledgerAdd':0}, {'ledgerDelete':0}, {'ledgerEdit':0}, ], key)
         updatedstatisticsList.append({date: newStatisticsItemList})
-
-    print(statisticsList)
-    print(updatedstatisticsList)
     
+
     configTable.update_item(
         Key={
             'configKey': 'statistics'
