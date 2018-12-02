@@ -937,6 +937,18 @@ def get_weather(userId):
     except URLError as e:
         logger.error("Server connection failed: %s", e.reason)
 
+
+    # AQI
+    aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
+    try:
+        responseAqi = requests.get(aqiUrl, verify=True)
+    except HTTPError as e:
+        logger.error("AQI Request failed: %d %s", e.code, e.reason)
+    except URLError as e:
+        logger.error("AQI Server connection failed: %s", e.reason)
+
+    aqi = responseAqi['data']['indexes']['ind_cpcb']['aqi']
+
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
     forecast_dict = {
@@ -955,9 +967,11 @@ def get_weather(userId):
             "weatherDate3": forecast[2]['date'],
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text']
+            "weatherDay3Text": forecast[2]['text'],
+            "aqiValue": aqi
         }
     }
+
     return jsonify(forecast_dict)
 
 @app.route("/ledger/add", methods=['POST'])
