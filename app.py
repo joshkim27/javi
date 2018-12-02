@@ -947,7 +947,7 @@ def get_weather(userId):
     except URLError as e:
         logger.error("AQI Server connection failed: %s", e.reason)
 
-    aqi = responseAqi['data']['indexes']['ind_cpcb']['aqi']
+    aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
 
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
