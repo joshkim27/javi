@@ -13,6 +13,9 @@ from dateutil.relativedelta import relativedelta
 from calendar import monthrange, monthcalendar
 from boto3.dynamodb.conditions import Key, Attr
 
+import pytz
+
+istTimeZone = pytz.timezone('Asia/Kolkata')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -883,6 +886,27 @@ def resetDailyInputCheck(event, context):
     )
     # test end
 
+    # ledger 통계 보내기
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    response = configTable.query(
+        KeyConditionExpression=Key('configKey').eq('statistics')
+    )
+    statisticsList = response['Items'][0]['statistics']
+    isExist = False
+    date = datetime.now(istTimeZone).strftime('%Y%m%d')
+    message = ''
+    for index, item in enumerate(statisticsList):
+        if date in item:
+            # 기존 날짜 존재
+            isExist = True
+            message = 'date: ' + date
+            statisticsObj = item[date]
+            for messageItem in statisticsObj:
+                message += ': ' + str(messageItem)
+            break
+
+    send_slack_notification(message)
+
 
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
@@ -913,6 +937,18 @@ def get_weather(userId):
     except URLError as e:
         logger.error("Server connection failed: %s", e.reason)
 
+
+    # AQI
+    aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
+    try:
+        responseAqi = requests.get(aqiUrl, verify=True)
+    except HTTPError as e:
+        logger.error("AQI Request failed: %d %s", e.code, e.reason)
+    except URLError as e:
+        logger.error("AQI Server connection failed: %s", e.reason)
+
+    aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
+
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
     forecast_dict = {
@@ -931,9 +967,11 @@ def get_weather(userId):
             "weatherDate3": forecast[2]['date'],
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text']
+            "weatherDay3Text": forecast[2]['text'],
+            "aqiValue": aqi
         }
     }
+
     return jsonify(forecast_dict)
 
 @app.route("/ledger/add", methods=['POST'])
@@ -958,7 +996,7 @@ def addLedger():
                     'index': count + 1,
                     'customerName': customerName,
                     'productAmount': productAmount,
-                    'date': datetime.now().strftime('%Y%m%d'),
+                    'date': datetime.now(istTimeZone).strftime('%Y%m%d'),
                 }]
             }
         )
@@ -968,7 +1006,7 @@ def addLedger():
             'index': count + 1,
             'customerName': customerName,
             'productAmount': productAmount,
-            'date': datetime.now().strftime('%Y%m%d'),
+            'date': datetime.now(istTimeZone).strftime('%Y%m%d'),
         }
         ledgerAppended.append(ledgerToAdd)
         ledgerTable.update_item(
@@ -981,7 +1019,7 @@ def addLedger():
             }
         )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerAdd')
 
     return jsonify({})
 
@@ -1061,7 +1099,7 @@ def deleteLedger():
         }
     )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerEdit')
 
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
@@ -1090,7 +1128,7 @@ def editLedger():
         }
     )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerDelete')
 
     return jsonify({
         "messages":[ {"text": "ledger updated" }]
@@ -1136,6 +1174,12 @@ def accumulate_statistics(dict, keyToUpdate):
         if keyToUpdate in item:
             dict[index][keyToUpdate] = dict[index][keyToUpdate] + 1
             return dict
+
+def send_slack_notification(text):
+    statisticsUrl = 'https://hooks.slack.com/services/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'
+    payload = '{"text": "' + text + '"}'
+    headers = {'content-type': 'application/json'}
+    response = requests.post(statisticsUrl, data=payload, headers=headers)
 
 ################# test source start ##########################
 
