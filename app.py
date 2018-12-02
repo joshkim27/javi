@@ -13,6 +13,9 @@ from dateutil.relativedelta import relativedelta
 from calendar import monthrange, monthcalendar
 from boto3.dynamodb.conditions import Key, Attr
 
+import pytz
+
+istTimeZone = pytz.timezone('Asia/Kolkata')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -883,6 +886,27 @@ def resetDailyInputCheck(event, context):
     )
     # test end
 
+    # ledger 통계 보내기
+    configTable = dynamodb.Table(CONFIG_TABLE)
+    response = configTable.query(
+        KeyConditionExpression=Key('configKey').eq('statistics')
+    )
+    statisticsList = response['Items'][0]['statistics']
+    isExist = False
+    date = datetime.now(istTimeZone).strftime('%Y%m%d')
+    message = ''
+    for index, item in enumerate(statisticsList):
+        if date in item:
+            # 기존 날짜 존재
+            isExist = True
+            message = 'date: ' + date
+            statisticsObj = item[date]
+            for messageItem in statisticsObj:
+                message += ': ' + str(messageItem)
+            break
+
+    send_slack_notification(message)
+
 
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
@@ -1136,6 +1160,12 @@ def accumulate_statistics(dict, keyToUpdate):
         if keyToUpdate in item:
             dict[index][keyToUpdate] = dict[index][keyToUpdate] + 1
             return dict
+
+def send_slack_notification(text):
+    statisticsUrl = 'https://hooks.slack.com/services/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'
+    payload = '{"text": "' + text + '"}'
+    headers = {'content-type': 'application/json'}
+    response = requests.post(statisticsUrl, data=payload, headers=headers)
 
 ################# test source start ##########################
 
