@@ -982,7 +982,7 @@ def addLedger():
                     'index': count + 1,
                     'customerName': customerName,
                     'productAmount': productAmount,
-                    'date': datetime.now().strftime('%Y%m%d'),
+                    'date': datetime.now(istTimeZone).strftime('%Y%m%d'),
                 }]
             }
         )
@@ -992,7 +992,7 @@ def addLedger():
             'index': count + 1,
             'customerName': customerName,
             'productAmount': productAmount,
-            'date': datetime.now().strftime('%Y%m%d'),
+            'date': datetime.now(istTimeZone).strftime('%Y%m%d'),
         }
         ledgerAppended.append(ledgerToAdd)
         ledgerTable.update_item(
@@ -1005,7 +1005,7 @@ def addLedger():
             }
         )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerAdd')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerAdd')
 
     return jsonify({})
 
@@ -1085,7 +1085,7 @@ def deleteLedger():
         }
     )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerEdit')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerEdit')
 
     return jsonify({
         "messages":[ {"text": "Ledger deleted" }]
@@ -1114,7 +1114,7 @@ def editLedger():
         }
     )
 
-    update_statistics(datetime.now().strftime('%Y%m%d'), 'ledgerDelete')
+    update_statistics(datetime.now(istTimeZone).strftime('%Y%m%d'), 'ledgerDelete')
 
     return jsonify({
         "messages":[ {"text": "ledger updated" }]
