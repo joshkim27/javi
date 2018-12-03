@@ -36,6 +36,7 @@ CONFIG_TABLE = os.environ['JAVI_CONFIG_TABLE']
 LEDGER_TABLE = os.environ['JAVI_LEDGER_TABLE']
 BOT_ID = os.environ['BOT_ID']
 TOKEN = os.environ['TOKEN']
+STAGE = os.environ['STAGE']
 
 IS_OFFLINE = os.environ.get('IS_OFFLINE')
 
@@ -50,7 +51,6 @@ if IS_OFFLINE:
 else:
     client = boto3.client('dynamodb')
     dynamodb = boto3.resource('dynamodb')
-
 
 @app.route("/")
 def hello():
@@ -893,7 +893,7 @@ def resetDailyInputCheck(event, context):
     )
     statisticsList = response['Items'][0]['statistics']
     isExist = False
-    date = datetime.now(istTimeZone).strftime('%Y%m%d')
+    date = (datetime.now(istTimeZone) - timedelta(days=1)).strftime('%Y%m%d')
     message = ''
     for index, item in enumerate(statisticsList):
         if date in item:
@@ -905,7 +905,8 @@ def resetDailyInputCheck(event, context):
                 message += ': ' + str(messageItem)
             break
 
-    send_slack_notification(message)
+    if STAGE == 'prod':
+        send_slack_notification(message)
 
 
 @app.route("/weather/<string:userId>")
