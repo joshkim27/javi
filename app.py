@@ -540,7 +540,7 @@ def add_postfix_date(date):
     return ret_date
 
 def add_postfix_date_month(date):
-    this_month = datetime.today().strftime('%b')
+    this_month = datetime.strptime(date, '%Y%m%d').strftime('%b')
     postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
 
     ret_date = add_postfix(date) + ' ' + this_month + '.'
@@ -969,7 +969,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": aqi
+            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")"
         }
     }
 
@@ -1464,3 +1464,88 @@ def update_daily(update_date):
     update_dailyInputCheck(userId, True)
 
     return jsonify({})
+
+# noti update
+@app.route("/noti/<string:userId>", methods=['POST'])
+def put_noti(userId):
+
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    resp = user_table.get_item(
+        Key={'userId':userId}
+    )
+    logger.info(resp)
+
+    uioNotiSales = request.form['uioNotiSales']
+    uioNotiLedger = request.form['uioNotiLedger']
+
+    item = resp.get('Item')
+    if not item:
+        return jsonify({})
+
+    resp = user_table.update_item(
+        Key = {
+            'userId':userId
+        },
+        UpdateExpression = "set noti = :noti, created_at= :created_at",
+        ExpressionAttributeValues={
+            ':noti': {'uioNotiSales':uioNotiSales, 'uioNotiLedger': uioNotiLedger},
+            ':created_at': datetime.utcnow().isoformat()
+        }
+    )
+
+    return jsonify({})
+
+
+@app.route("/noti/ledger/broadcast", methods=['GET'])
+def broadcast_ledger_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiLedger').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.debug(i['userId'])
+        send_message(i['userId'], 'ListofLedger', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
+
+
+@app.route("/noti/sales/broadcast", methods=['GET'])
+def broadcast_sales_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiSales').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.debug(i['userId'])
+        send_message(i['userId'], 'DailyInput_BR', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
