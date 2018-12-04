@@ -969,7 +969,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + str(aqi)
+            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")"
         }
     }
 
