@@ -1495,3 +1495,30 @@ def put_noti(userId):
     )
 
     return jsonify({})
+
+
+@app.route("/noti/ledger/broadcast", methods=['GET'])
+def broadcast_ledger_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiLedger').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.debug(i['userId'])
+        send_message(i['userId'], 'ListofLedger', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
