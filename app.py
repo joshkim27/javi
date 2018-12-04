@@ -1464,3 +1464,34 @@ def update_daily(update_date):
     update_dailyInputCheck(userId, True)
 
     return jsonify({})
+
+# noti update
+@app.route("/noti/<string:userId>", methods=['POST'])
+def put_noti(userId):
+
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    resp = user_table.get_item(
+        Key={'userId':userId}
+    )
+    logger.info(resp)
+
+    uioNotiSales = request.form['uioNotiSales']
+    uioNotiLedger = request.form['uioNotiLedger']
+
+    item = resp.get('Item')
+    if not item:
+        return jsonify({})
+
+    resp = user_table.update_item(
+        Key = {
+            'userId':userId
+        },
+        UpdateExpression = "set noti = :noti, created_at= :created_at",
+        ExpressionAttributeValues={
+            ':noti': {'uioNotiSales':uioNotiSales, 'uioNotiLedger': uioNotiLedger},
+            ':created_at': datetime.utcnow().isoformat()
+        }
+    )
+
+    return jsonify({})
