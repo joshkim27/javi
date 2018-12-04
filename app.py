@@ -1522,3 +1522,30 @@ def broadcast_ledger_noti():
         ret.append(i['userId'])
 
     return jsonify({'listOfUser':ret})
+
+
+@app.route("/noti/sales/broadcast", methods=['GET'])
+def broadcast_sales_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiSales').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.debug(i['userId'])
+        send_message(i['userId'], 'DailyInput_BR', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
