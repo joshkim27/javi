@@ -98,8 +98,15 @@ def create_user():
     latitude = request.form['latitude']
     if not latitude:
         latitude = 'None'
+    uioNotiSales = request.form['uioNotiSales']
+    if not uioNotiSales:
+        uioNotiSales = '21'
+    uioNotiLedger = request.form['uioNotiLedger']
+    if not uioNotiLedger:
+        uioNotiLedger = '09'
 
-    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude)
+    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
+             longitude, latitude, uioNotiSales, uioNotiLedger)
 
     return jsonify({"text": "Welcome to the Javi Rockets!"})
 
@@ -608,24 +615,26 @@ def send_message(userId, blockName, contents):
     return jsonify({'action': 'Successfully sent'})
 
 
-def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude):
-    client.put_item(
-        TableName=USERS_TABLE,
+def put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
+             longitude, latitude, uioNotiSales, uioNotiLedger):
+    user_table = dynamodb.Table(USERS_TABLE)
+    user_table.put_item(
         Item={
-            'userId': {'S': userId},
-            'first_name': {'S': first_name},
-            'last_name': {'S': last_name},
-            'gender': {'S': gender},
-            'chatfuel_userId': {'S': chatfuel_userId},
-            'source': {'S': source},
-            'profile_pic_url': {'S': profile_pic_url},
-            'locale': {'S': locale},
-            'timezone': {'S': timezone},
-            'longitude': {'S': longitude},
-            'latitude': {'S': latitude},
-            'ref': {'S': ref},
-            'registration_date': {'S': datetime.utcnow().isoformat()},
-            'dailyInputCheck': {'BOOL': False}
+            'userId': userId,
+            'first_name': first_name,
+            'last_name': last_name,
+            'gender': gender,
+            'chatfuel_userId': chatfuel_userId,
+            'source': source,
+            'profile_pic_url': profile_pic_url,
+            'locale': locale,
+            'timezone': timezone,
+            'longitude': longitude,
+            'latitude': latitude,
+            'ref': ref,
+            'registration_date': datetime.utcnow().isoformat(),
+            'dailyInputCheck': False ,
+            'noti':{'uioNotiSales':uioNotiSales, 'uioNotiLedger':uioNotiLedger}
         }
     )
 
@@ -1549,3 +1558,79 @@ def broadcast_sales_noti():
         ret.append(i['userId'])
 
     return jsonify({'listOfUser':ret})
+
+
+@app.route("/noti/all", methods=['GET'])
+def put_noti_all():
+
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti').not_exists()
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+    logger.debug(resp)
+
+    for i in items:
+        logger.debug(' ================== '+i['userId'] + i['first_name'])
+        resp = user_table.update_item(
+            Key={
+                'userId': i['userId']
+            },
+            UpdateExpression="set noti = :noti",
+            ExpressionAttributeValues={
+                ':noti': {'uioNotiSales': '21', 'uioNotiLedger': '09'}
+            }
+        )
+
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
+
+@app.route("/migrate/cost", methods=['GET'])
+def migrate_monthly_cost():
+    user_table = dynamodb.Table(USERS_TABLE)
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    fe = Attr('uioRentalPeriod').exists() & Attr('userMonthlyId').contains('201812')
+    resp = monthly_table.scan(
+        FilterExpression=fe,
+    )
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+    logger.debug(resp)
+
+    for i in items:
+        logger.debug(' ============='+ i['userMonthlyId'] + ': '+ str(i))
+        resp = user_table.update_item(
+            Key={
+                'userId':i['userMonthlyId'][:-6]
+            },
+            UpdateExpression="set cost = :cost",
+            ExpressionAttributeValues={
+                ':cost': {'uioRentalPeriod': i['uioRentalPeriod'],
+                          'uimRentalPayDate': i['uimRentalPayDate'],
+                          'uioRentalAmount': i['uioRentalAmount'],
+                          'uimEmployeePayDate': i['uimEmployeePayDate'],
+                          'uioEmployeeNumber': i['uioEmployeeNumber'],
+                          'uioEmployeeAmount': i['uioEmployeeAmount'],
+                          'uioOtherCostDueDate': i['uioOtherCostDueDate'],
+                          'uioOtherCost': i['uioOtherCost']}
+            }
+        )
+        ret.append(i['userMonthlyId'][:-6])
+
+    return jsonify({'listOfUser':ret})
+
