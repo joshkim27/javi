@@ -98,15 +98,9 @@ def create_user():
     latitude = request.form['latitude']
     if not latitude:
         latitude = 'None'
-    uioNotiSales = request.form['uioNotiSales']
-    if not uioNotiSales:
-        uioNotiSales = '21'
-    uioNotiLedger = request.form['uioNotiLedger']
-    if not uioNotiLedger:
-        uioNotiLedger = '09'
 
     put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
-             longitude, latitude, uioNotiSales, uioNotiLedger)
+             longitude, latitude, '21', '09')
 
     return jsonify({"text": "Welcome to the Javi Rockets!"})
 
