@@ -1628,3 +1628,166 @@ def migrate_monthly_cost():
 
     return jsonify({'listOfUser':ret})
 
+
+# user_table 에서 cost 가져오기
+def get_montly_cost(userId):
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    resp = user_table.get_item(
+        Key={'userId':userId}
+    )
+
+    item = resp.get('Item')
+    if not item or not item['cost']:
+        return None
+
+    cost = item['cost']
+
+    return {'uioRentalPeriod': cost['uioRentalPeriod'],
+            'uimRentalPayDate': cost['uimRentalPayDate'],
+            'uioRentalAmount': cost['uioRentalAmount'],
+            'uimEmployeePayDate': cost['uimEmployeePayDate'],
+            'uioEmployeeNumber': cost['uioEmployeeNumber'],
+            'uioEmployeeAmount': cost['uioEmployeeAmount'],
+            'uioOtherCostDueDate': cost['uioOtherCostDueDate'],
+            'uioOtherCost': cost['uioOtherCost']}
+
+
+# 일주일 전 데이터 조회
+@app.route("/weekly/previous/<string:userId>")
+def get_previous_weekly_report(userId):
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    dates = []
+
+    for x in range(7):
+        dates.append((datetime.now() - timedelta(days=(7 - x))).strftime('%Y%m%d'))
+
+    fe = Key('userDailyId').between(userId + dates[0], userId + dates[6])
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+
+    temp = {}
+
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    message_header = " Sales report of previous 7days\n" + add_postfix_date2(dates[0]) + ' ~ ' \
+                     + add_postfix_date2(dates[6]) + '\n\n'
+    message_body = 'Date|Sales|Buying|Profit\n'
+
+    for y in dates:
+
+        if (userId + y) in temp:
+            z = temp[userId + y]
+            message_body = '%s |%6d | %6d | %6d' % (add_postfix_date2(y), z[0], z[1], (z[0] - z[1]))
+        else:
+            message_body = message_body + add_postfix_date2(y) + '|' + "    -|    -|    -"
+
+        message_body = message_body + '\n'
+
+    return jsonify({
+        "messages": [{"text": message_header + message_body }]
+    })
+
+
+# get_montly_cost(user table 의 cost)
+def get_monthly_report(userId, now):
+
+    today = now.strftime('%Y%m%d')
+    this_month = now.strftime(('%Y%m'))
+    this_month_text = now.strftime('%b')
+    start_date_month = this_month + '01'
+
+    dates = monthcalendar(int(now.strftime('%Y')), int(now.strftime('%m')))
+    message = now.strftime('%b') + ' Sales Report\n' + add_postfix(start_date_month[6:]) + \
+              ' ' + this_month_text + ' ~ ' + add_postfix(today[6:8]) + ' ' + this_month_text + '\n' +\
+              '\nWeek \n : Buying | Sales | Profit\n'
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    fe = Key('userDailyId').between(userId + start_date_month, userId + today)
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+    temp = {}
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    logger.debug(temp)
+
+    total_sales = 0
+    total_buying = 0
+
+    for week_days in dates:
+        logger.debug(week_days)
+        sum_sales = 0
+        sum_buying = 0
+        lastday_of_week = 0
+        uncountable_days = 0
+
+
+        for day in week_days :
+            logger.debug(day)
+            if day == 0:
+                uncountable_days = uncountable_days + 1
+            elif day < 10:
+                daily_id = userId + this_month + '0' + str(day)
+                lastday_of_week = day
+            else:
+                daily_id = userId + this_month + str(day)
+                lastday_of_week = day
+
+            if day > 0 and (daily_id in temp):
+
+                add_sales = temp[daily_id][0]
+                add_buying = temp[daily_id][1]
+            else:
+                add_sales = 0
+                add_buying = 0
+
+            sum_sales = sum_sales + add_sales
+            sum_buying = sum_buying + add_buying
+
+        text_week = 'W' + (now.replace(day=lastday_of_week)).strftime('%W')
+        if uncountable_days > 0 :
+            text_week = text_week + '(%ddays)'%(7-uncountable_days)
+
+        text_week = text_week + '\n'
+
+        message = message + text_week + ' :%6d | %6d | %6d'%( sum_sales, sum_buying, (sum_sales - sum_buying)) + '\n'
+
+        total_sales = total_sales + sum_sales
+        total_buying = total_buying + sum_buying
+
+        logger.debug(message)
+    message = message + '\n' + this_month_text + '\n' + \
+              ' :%6d | %6d | %6d'%(total_sales, total_buying, (total_sales - total_buying)) + \
+              '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
+
+    item_monthly = get_montly_cost(userId)
+    if not item_monthly:
+        total_cost = 0
+    else:
+        total_cost = int(item_monthly['uioRentalAmount']) + int(item_monthly['uioEmployeeAmount'])\
+                     + int(item_monthly['uioOtherCost'])
+
+    message = message + '%drs\n= %d - %d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
+
+    logger.debug(message)
+
+    return message
+
+# date format '20181101' => 1st Nov.
+def add_postfix_date2(date):
+    this_date = datetime.strptime(date, '%Y%m%d')
+    this_month = this_date.strftime('%b')
+    postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
+
+    ret_date = str(int(date[-2:])) + postfix_date.get(int(date[-2:]), 'th') + ' ' + this_month + '.'
+
+    return ret_date
