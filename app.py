@@ -973,7 +973,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date2(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
+            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date_month(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
         }
     }
 
@@ -1582,17 +1582,17 @@ def get_previous_weekly_report(userId):
         logger.debug(i)
         temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
 
-    message_header = " Sales report of previous 7days\n" + add_postfix_date2(dates[0]) + ' ~ ' \
-                     + add_postfix_date2(dates[6]) + '\n\n'
+    message_header = " Sales report of previous 7days\n" + add_postfix_date_month(dates[0]) + ' ~ ' \
+                     + add_postfix_date_month(dates[6]) + '\n\n'
     message_body = 'Date|Sales|Buying|Profit\n'
 
     for y in dates:
 
         if (userId + y) in temp:
             z = temp[userId + y]
-            message_body = '%s |%6d | %6d | %6d' % (add_postfix_date2(y), z[0], z[1], (z[0] - z[1]))
+            message_body = '%s |%6d | %6d | %6d' % (add_postfix_date_month(y), z[0], z[1], (z[0] - z[1]))
         else:
-            message_body = message_body + add_postfix_date2(y) + '|' + "    -|    -|    -"
+            message_body = message_body + add_postfix_date_month(y) + '|' + "    -|    -|    -"
 
         message_body = message_body + '\n'
 
@@ -1689,12 +1689,24 @@ def get_monthly_report(userId, now):
 
     return message
 
-# date format '20181101' => 1st Nov.
-def add_postfix_date2(date):
-    this_date = datetime.strptime(date, '%Y%m%d')
-    this_month = this_date.strftime('%b')
-    postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
 
-    ret_date = str(int(date[-2:])) + postfix_date.get(int(date[-2:]), 'th') + ' ' + this_month + '.'
+def update_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
 
-    return ret_date
+    client.update_item(
+        TableName=MONTHLY_TABLE,
+        Key={
+            'userMonthlyId': {'S': userMonthlyId}
+        },
+        AttributeUpdates={
+            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod}, 'Action': 'PUT'},
+            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate}, 'Action': 'PUT'},
+            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate}, 'Action': 'PUT'},
+            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate}, 'Action': 'PUT'},
+            'uioRentalAmount': {'Value': {'N': uioRentalAmount}, 'Action': 'PUT'},
+            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber}, 'Action': 'PUT'},
+            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount}, 'Action': 'PUT'},
+            'uioOtherCost': {'Value': {'N': uioOtherCost}, 'Action': 'PUT'}
+
+        }
+    )
