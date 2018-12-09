@@ -177,8 +177,8 @@ def put_monthly_cost():
 
     this_month = datetime.now().strftime('%Y%m')
 
-    update_monthly_cost(userId + this_month, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
-                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost)
+    update_cost(userId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+                uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost)
 
     return jsonify({})
 
@@ -533,6 +533,7 @@ def add_postfix_date(date):
 
     return ret_date
 
+
 def add_postfix_date_month(date):
     this_month = datetime.strptime(date, '%Y%m%d').strftime('%b')
     postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
@@ -540,27 +541,6 @@ def add_postfix_date_month(date):
     ret_date = add_postfix(date) + ' ' + this_month + '.'
 
     return ret_date
-
-
-def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
-                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
-    client.update_item(
-        TableName=MONTHLY_TABLE,
-        Key={
-            'userMonthlyId': {'S': userMonthlyId}
-        },
-        AttributeUpdates={
-            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod}, 'Action': 'PUT'},
-            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate}, 'Action': 'PUT'},
-            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate}, 'Action': 'PUT'},
-            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate}, 'Action': 'PUT'},
-            'uioRentalAmount': {'Value': {'N': uioRentalAmount}, 'Action': 'PUT'},
-            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber}, 'Action': 'PUT'},
-            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount}, 'Action': 'PUT'},
-            'uioOtherCost': {'Value': {'N': uioOtherCost}, 'Action': 'PUT'}
-
-        }
-    )
 
 
 def send_message(userId, blockName, contents):
@@ -1683,23 +1663,23 @@ def get_monthly_report(userId, now):
     return message
 
 
-def update_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+def update_cost(userId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
                         uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
 
-    client.update_item(
-        TableName=MONTHLY_TABLE,
+    user_table = dynamodb.Table(USERS_TABLE)
+    resp = user_table.update_item(
         Key={
-            'userMonthlyId': {'S': userMonthlyId}
+            'userId': userId
         },
-        AttributeUpdates={
-            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod}, 'Action': 'PUT'},
-            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate}, 'Action': 'PUT'},
-            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate}, 'Action': 'PUT'},
-            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate}, 'Action': 'PUT'},
-            'uioRentalAmount': {'Value': {'N': uioRentalAmount}, 'Action': 'PUT'},
-            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber}, 'Action': 'PUT'},
-            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount}, 'Action': 'PUT'},
-            'uioOtherCost': {'Value': {'N': uioOtherCost}, 'Action': 'PUT'}
-
+        UpdateExpression="set cost = :cost",
+        ExpressionAttributeValues={
+            ':cost': {'uioRentalPeriod': uioRentalPeriod,
+                      'uimRentalPayDate': uimRentalPayDate,
+                      'uioRentalAmount': uioRentalAmount,
+                      'uimEmployeePayDate': uimEmployeePayDate,
+                      'uioEmployeeNumber': uioEmployeeNumber,
+                      'uioEmployeeAmount': uioEmployeeAmount,
+                      'uioOtherCostDueDate': uioOtherCostDueDate,
+                      'uioOtherCost': uioOtherCost}
         }
     )
