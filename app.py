@@ -1631,7 +1631,7 @@ def migrate_monthly_cost():
 
 
 # user_table 에서 cost 가져오기
-def get_montly_cost(userId):
+def get_monthly_cost(userId):
     user_table = dynamodb.Table(USERS_TABLE)
 
     resp = user_table.get_item(
@@ -1770,7 +1770,7 @@ def get_monthly_report(userId, now):
               ' :%6d | %6d | %6d'%(total_sales, total_buying, (total_sales - total_buying)) + \
               '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
 
-    item_monthly = get_montly_cost(userId)
+    item_monthly = get_monthly_cost(userId)
     if not item_monthly:
         total_cost = 0
     else:
