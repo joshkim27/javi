@@ -915,73 +915,70 @@ def resetDailyInputCheck(event, context):
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
     # user의 위도 경도 호출
-    # resp = client.get_item(
-    #     TableName=DAILY_TABLE,
-    #     Key={
-    #         'userId': { 'S': userId }
+
+    usersTable = dynamodb.Table(USERS_TABLE)
+    response = usersTable.query(
+        KeyConditionExpression=Key('userId').eq(userId)
+    )
+    item = response['Items']
+    longitude = item.get('longitude').get('S')
+    latitude = item.get('latitude').get('S')
+
+    forecast_dict = {"longitude": longitude, "latitude": latitude}
+    
+    # longitude = '28.451850'
+    # latitude = '77.08684'
+
+    # # yahoo api 호출
+    # yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
+
+    # try:
+    #     response = requests.get(yql, verify=True)
+    # except HTTPError as e:
+    #     logger.error("Request failed: %d %s", e.code, e.reason)
+    # except URLError as e:
+    #     logger.error("Server connection failed: %s", e.reason)
+
+
+    # # AQI
+    # aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
+    # try:
+    #     responseAqi = requests.get(aqiUrl, verify=True)
+    # except HTTPError as e:
+    #     logger.error("AQI Request failed: %d %s", e.code, e.reason)
+    # except URLError as e:
+    #     logger.error("AQI Server connection failed: %s", e.reason)
+
+    # aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
+    # aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
+
+    # jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
+    # forecast = response.json()['query']['results']['channel']['item']['forecast']
+    # forecast_dict = {
+    #     "set_attributes": {
+    #         "weatherDay1": forecast[0]['day'],
+    #         "weatherDate1": forecast[0]['date'],
+    #         "weatherDay1High": forecast[0]['high'],
+    #         "weatherDay1Low": forecast[0]['low'],
+    #         "weatherDay1Text": forecast[0]['text'],
+    #         "weatherDay2": forecast[1]['day'],
+    #         "weatherDate2": forecast[1]['date'],
+    #         "weatherDay2High": forecast[1]['high'],
+    #         "weatherDay2Low": forecast[1]['low'],
+    #         "weatherDay2Text": forecast[1]['text'],
+    #         "weatherDay3": forecast[2]['day'],
+    #         "weatherDate3": forecast[2]['date'],
+    #         "weatherDay3High": forecast[2]['high'],
+    #         "weatherDay3Low": forecast[2]['low'],
+    #         "weatherDay3Text": forecast[2]['text'],
+    #         "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date2(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
     #     }
-    # )
-
-    # item = resp.get('Item')
-    # if not item:
-    #     return jsonify({'error': 'User does not exist'}), 404
-
-    # longitude = item.get('longitude').get('S')
-    # latitude = item.get('latitude').get('S')
-    longitude = '28.451850'
-    latitude = '77.08684'
-
-    # yahoo api 호출
-    yql = 'https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20weather.forecast%20where%20woeid%20in%20(SELECT%20woeid%20FROM%20geo.places%20WHERE%20text%3D%22(' + longitude + ',' + latitude + ')%22)%20AND%20u=%27c%27&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys'
-
-    try:
-        response = requests.get(yql, verify=True)
-    except HTTPError as e:
-        logger.error("Request failed: %d %s", e.code, e.reason)
-    except URLError as e:
-        logger.error("Server connection failed: %s", e.reason)
-
-
-    # AQI
-    aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
-    try:
-        responseAqi = requests.get(aqiUrl, verify=True)
-    except HTTPError as e:
-        logger.error("AQI Request failed: %d %s", e.code, e.reason)
-    except URLError as e:
-        logger.error("AQI Server connection failed: %s", e.reason)
-
-    aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
-    aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
-
-    jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
-    forecast = response.json()['query']['results']['channel']['item']['forecast']
-    forecast_dict = {
-        "set_attributes": {
-            "weatherDay1": forecast[0]['day'],
-            "weatherDate1": forecast[0]['date'],
-            "weatherDay1High": forecast[0]['high'],
-            "weatherDay1Low": forecast[0]['low'],
-            "weatherDay1Text": forecast[0]['text'],
-            "weatherDay2": forecast[1]['day'],
-            "weatherDate2": forecast[1]['date'],
-            "weatherDay2High": forecast[1]['high'],
-            "weatherDay2Low": forecast[1]['low'],
-            "weatherDay2Text": forecast[1]['text'],
-            "weatherDay3": forecast[2]['day'],
-            "weatherDate3": forecast[2]['date'],
-            "weatherDay3High": forecast[2]['high'],
-            "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date2(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
-        }
-    }
+    # }
 
     return jsonify(forecast_dict)
 
 @app.route("/ledger/add", methods=['POST'])
 def addLedger():
-    print(request.form)
     userId = request.form['messenger user id']
     customerName = request.form['uioCustomerName']
     productAmount = request.form['uioProductAmount']
