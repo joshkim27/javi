@@ -949,6 +949,7 @@ def get_weather(userId):
         logger.error("AQI Server connection failed: %s", e.reason)
 
     aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
+    aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
 
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
@@ -969,7 +970,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")"
+            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")\n" + aqiCategory
         }
     }
 
