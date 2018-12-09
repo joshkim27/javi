@@ -973,7 +973,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")\n" + aqiCategory
+            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date2(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
         }
     }
 
