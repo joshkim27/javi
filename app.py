@@ -449,22 +449,15 @@ def get_user(userId):
 @app.route("/cost/<string:userId>")
 def get_cost(userId):
     logger.debug('Call get_cost')
-    this_month = datetime.now().strftime('%Y%m')
 
-    resp_monthly = client.get_item(
-        TableName=MONTHLY_TABLE,
-        Key={
-            'userMonthlyId': {'S': userId + this_month}
-        }
-    )
+    item = get_monthly_cost(userId)
 
-    item = resp_monthly.get('Item')
     if not item:
         return jsonify({'error': 'User does not exist'}), 404
 
-    uimRentalPayDate = int(item.get('uimRentalPayDate').get('N'))
-    uimEmployeePayDate = int(item.get('uimEmployeePayDate').get('N'))
-    uioOtherCostDueDate = int(item.get('uioOtherCostDueDate').get('N'))
+    uimRentalPayDate = int(item['uimRentalPayDate'])
+    uimEmployeePayDate = int(item['uimEmployeePayDate'])
+    uioOtherCostDueDate = int(item['uioOtherCostDueDate'])
 
     return jsonify({
         "set_attributes": {
@@ -1546,7 +1539,7 @@ def get_monthly_cost(userId):
 
     item = resp.get('Item')
     if not item or not item['cost']:
-        return None
+        return False
 
     cost = item['cost']
 
