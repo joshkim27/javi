@@ -884,6 +884,11 @@ def resetDailyInputCheck(event, context):
     if STAGE == 'prod':
         send_slack_notification(message)
 
+# hourly cron
+def hourlyCron(event, context):
+    broadcast_ledger_noti()
+    broadcast_sales_noti()
+
 
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
