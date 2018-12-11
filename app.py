@@ -1405,7 +1405,7 @@ def broadcast_ledger_noti():
     ret = []
 
     for i in items:
-        logger.debug(i['userId'])
+        logger.info("receiver id: " + i['userId'])
         send_message(i['userId'], 'ListofLedger', {})
         ret.append(i['userId'])
 
