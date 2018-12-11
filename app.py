@@ -579,7 +579,7 @@ def send_message(userId, blockName, contents):
     except URLError as e:
         logger.error("Server connection failed: %s", e.reason)
 
-    return jsonify({'action': 'Successfully sent'})
+    return  {'action': 'Successfully sent'}
 
 
 def put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
