@@ -889,6 +889,7 @@ def resetDailyInputCheck(event, context):
 def hourlyCron():
     broadcast_ledger_noti()
     broadcast_sales_noti()
+    return {}
 
 
 @app.route("/weather/<string:userId>")
