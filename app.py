@@ -886,7 +886,7 @@ def resetDailyInputCheck(event, context):
 
 # hourly cron
 @app.route("/cron/hourly")
-def hourlyCron(event, context):
+def hourlyCron():
     broadcast_ledger_noti()
     broadcast_sales_noti()
 
