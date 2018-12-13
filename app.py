@@ -885,6 +885,7 @@ def resetDailyInputCheck(event, context):
         send_slack_notification(message)
 
 # hourly cron
+@app.route("/cron/hourly")
 def hourlyCron(event, context):
     broadcast_ledger_noti()
     broadcast_sales_noti()
