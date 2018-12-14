@@ -99,7 +99,8 @@ def create_user():
     if not latitude:
         latitude = 'None'
 
-    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude)
+    put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
+             longitude, latitude, '21', '09')
 
     return jsonify({"text": "Welcome to the Javi Rockets!"})
 
@@ -176,8 +177,8 @@ def put_monthly_cost():
 
     this_month = datetime.now().strftime('%Y%m')
 
-    update_monthly_cost(userId + this_month, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
-                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost)
+    update_cost(userId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+                uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost)
 
     return jsonify({})
 
@@ -448,22 +449,15 @@ def get_user(userId):
 @app.route("/cost/<string:userId>")
 def get_cost(userId):
     logger.debug('Call get_cost')
-    this_month = datetime.now().strftime('%Y%m')
 
-    resp_monthly = client.get_item(
-        TableName=MONTHLY_TABLE,
-        Key={
-            'userMonthlyId': {'S': userId + this_month}
-        }
-    )
+    item = get_monthly_cost(userId)
 
-    item = resp_monthly.get('Item')
     if not item:
         return jsonify({'error': 'User does not exist'}), 404
 
-    uimRentalPayDate = int(item.get('uimRentalPayDate').get('N'))
-    uimEmployeePayDate = int(item.get('uimEmployeePayDate').get('N'))
-    uioOtherCostDueDate = int(item.get('uioOtherCostDueDate').get('N'))
+    uimRentalPayDate = int(item['uimRentalPayDate'])
+    uimEmployeePayDate = int(item['uimEmployeePayDate'])
+    uioOtherCostDueDate = int(item['uioOtherCostDueDate'])
 
     return jsonify({
         "set_attributes": {
@@ -539,6 +533,7 @@ def add_postfix_date(date):
 
     return ret_date
 
+
 def add_postfix_date_month(date):
     this_month = datetime.strptime(date, '%Y%m%d').strftime('%b')
     postfix_date = {1: 'st', 21: 'st', 31: 'st', 2: 'nd', 22: 'nd', 3: 'rd', 23: 'rd'}
@@ -546,27 +541,6 @@ def add_postfix_date_month(date):
     ret_date = add_postfix(date) + ' ' + this_month + '.'
 
     return ret_date
-
-
-def update_monthly_cost(userMonthlyId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
-                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
-    client.update_item(
-        TableName=MONTHLY_TABLE,
-        Key={
-            'userMonthlyId': {'S': userMonthlyId}
-        },
-        AttributeUpdates={
-            'uioRentalPeriod': {'Value': {'S': uioRentalPeriod}, 'Action': 'PUT'},
-            'uimRentalPayDate': {'Value': {'N': uimRentalPayDate}, 'Action': 'PUT'},
-            'uioOtherCostDueDate': {'Value': {'N': uioOtherCostDueDate}, 'Action': 'PUT'},
-            'uimEmployeePayDate': {'Value': {'N': uimEmployeePayDate}, 'Action': 'PUT'},
-            'uioRentalAmount': {'Value': {'N': uioRentalAmount}, 'Action': 'PUT'},
-            'uioEmployeeNumber': {'Value': {'N': uioEmployeeNumber}, 'Action': 'PUT'},
-            'uioEmployeeAmount': {'Value': {'N': uioEmployeeAmount}, 'Action': 'PUT'},
-            'uioOtherCost': {'Value': {'N': uioOtherCost}, 'Action': 'PUT'}
-
-        }
-    )
 
 
 def send_message(userId, blockName, contents):
@@ -605,27 +579,29 @@ def send_message(userId, blockName, contents):
     except URLError as e:
         logger.error("Server connection failed: %s", e.reason)
 
-    return jsonify({'action': 'Successfully sent'})
+    return  {'action': 'Successfully sent'}
 
 
-def put_user( userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref, longitude, latitude):
-    client.put_item(
-        TableName=USERS_TABLE,
+def put_user(userId, first_name, last_name, gender, chatfuel_userId, source, profile_pic_url, locale, timezone, ref,
+             longitude, latitude, uioNotiSales, uioNotiLedger):
+    user_table = dynamodb.Table(USERS_TABLE)
+    user_table.put_item(
         Item={
-            'userId': {'S': userId},
-            'first_name': {'S': first_name},
-            'last_name': {'S': last_name},
-            'gender': {'S': gender},
-            'chatfuel_userId': {'S': chatfuel_userId},
-            'source': {'S': source},
-            'profile_pic_url': {'S': profile_pic_url},
-            'locale': {'S': locale},
-            'timezone': {'S': timezone},
-            'longitude': {'S': longitude},
-            'latitude': {'S': latitude},
-            'ref': {'S': ref},
-            'registration_date': {'S': datetime.utcnow().isoformat()},
-            'dailyInputCheck': {'BOOL': False}
+            'userId': userId,
+            'first_name': first_name,
+            'last_name': last_name,
+            'gender': gender,
+            'chatfuel_userId': chatfuel_userId,
+            'source': source,
+            'profile_pic_url': profile_pic_url,
+            'locale': locale,
+            'timezone': timezone,
+            'longitude': longitude,
+            'latitude': latitude,
+            'ref': ref,
+            'registration_date': datetime.utcnow().isoformat(),
+            'dailyInputCheck': False ,
+            'noti':{'uioNotiSales':uioNotiSales, 'uioNotiLedger':uioNotiLedger}
         }
     )
 
@@ -908,6 +884,13 @@ def resetDailyInputCheck(event, context):
     if STAGE == 'prod':
         send_slack_notification(message)
 
+# hourly cron
+@app.route("/cron/hourly")
+def hourlyCron():
+    broadcast_ledger_noti()
+    broadcast_sales_noti()
+    return {}
+
 
 @app.route("/weather/<string:userId>")
 def get_weather(userId):
@@ -949,6 +932,7 @@ def get_weather(userId):
         logger.error("AQI Server connection failed: %s", e.reason)
 
     aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
+    aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
 
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
@@ -969,7 +953,7 @@ def get_weather(userId):
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
             "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " (" + datetime.now(istTimeZone).strftime('%Y%m%d %I%p') + ")"
+            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date_month(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
         }
     }
 
@@ -1340,7 +1324,7 @@ def put_daily2(userId, uimDailySales, uimDailyBuying, todayDate):
 def get_this_montly_report(userId):
     now = datetime.now()
     return jsonify({
-        "messages":[{"text": get_montly_report(userId,now)}]
+        "messages":[{"text": get_monthly_report(userId,now)}]
     })
 
 
@@ -1349,11 +1333,256 @@ def get_previous_montly_report(userId):
     now = datetime.now() - relativedelta(months=1)
     now = now.replace(day=(monthrange(int(now.strftime('%Y')), int(now.strftime('%m')))[1]))
     return jsonify({
-        "messages":[{"text": get_montly_report(userId,now)}]
+        "messages":[{"text": get_monthly_report(userId,now)}]
     })
 
 
-def get_montly_report(userId, now):
+@app.route("/daily/<string:update_date>", methods=['POST'])
+def update_daily(update_date):
+    userId = request.form['messenger user id']
+    if not userId:
+        return jsonify({'error': 'Please provider userId'}), 400
+
+    uimDailySales = request.form['uimDailySales']
+    uimDailyBuying = request.form['uimDailyBuying']
+
+    logger.info('daily_input|' + userId + '|' + uimDailySales + '|' + uimDailyBuying)
+
+    put_daily(userId, uimDailySales, uimDailyBuying, datetime.strptime(update_date,'%Y%m%d'))
+
+    # 일입력 체크
+    update_dailyInputCheck(userId, True)
+
+    return jsonify({})
+
+# noti update
+@app.route("/noti/<string:userId>", methods=['POST'])
+def put_noti(userId):
+
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    resp = user_table.get_item(
+        Key={'userId':userId}
+    )
+    logger.info(resp)
+
+    uioNotiSales = request.form['uioNotiSales']
+    uioNotiLedger = request.form['uioNotiLedger']
+
+    item = resp.get('Item')
+    if not item:
+        return jsonify({})
+
+    resp = user_table.update_item(
+        Key = {
+            'userId':userId
+        },
+        UpdateExpression = "set noti = :noti, created_at= :created_at",
+        ExpressionAttributeValues={
+            ':noti': {'uioNotiSales':uioNotiSales, 'uioNotiLedger': uioNotiLedger},
+            ':created_at': datetime.utcnow().isoformat()
+        }
+    )
+
+    return jsonify({})
+
+
+@app.route("/noti/ledger/broadcast", methods=['GET'])
+def broadcast_ledger_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiLedger').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.info("receiver id: " + i['userId'])
+        send_message(i['userId'], 'ListofLedger', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
+
+
+@app.route("/noti/sales/broadcast", methods=['GET'])
+def broadcast_sales_noti():
+    hour = datetime.now(istTimeZone).strftime('%H')
+    logger.debug(hour)
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti.uioNotiSales').eq(hour)
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+
+    for i in items:
+        logger.debug(i['userId'])
+        send_message(i['userId'], 'DailyInput_BR', {})
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
+
+
+@app.route("/noti/all", methods=['GET'])
+def put_noti_all():
+
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    fe = Attr('noti').not_exists()
+    resp = user_table.scan(
+        FilterExpression=fe,
+    )
+
+    logger.debug(resp)
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+    logger.debug(resp)
+
+    for i in items:
+        logger.debug(' ================== '+i['userId'] + i['first_name'])
+        resp = user_table.update_item(
+            Key={
+                'userId': i['userId']
+            },
+            UpdateExpression="set noti = :noti",
+            ExpressionAttributeValues={
+                ':noti': {'uioNotiSales': '21', 'uioNotiLedger': '09'}
+            }
+        )
+
+        ret.append(i['userId'])
+
+    return jsonify({'listOfUser':ret})
+
+@app.route("/migrate/cost", methods=['GET'])
+def migrate_monthly_cost():
+    user_table = dynamodb.Table(USERS_TABLE)
+    monthly_table = dynamodb.Table(MONTHLY_TABLE)
+
+    fe = Attr('uioRentalPeriod').exists() & Attr('userMonthlyId').contains('201812')
+    resp = monthly_table.scan(
+        FilterExpression=fe,
+    )
+
+    items = resp.get('Items')
+    if not items:
+        return jsonify({})
+
+    ret = []
+    logger.debug(resp)
+
+    for i in items:
+        logger.debug(' ============='+ i['userMonthlyId'] + ': '+ str(i))
+        resp = user_table.update_item(
+            Key={
+                'userId':i['userMonthlyId'][:-6]
+            },
+            UpdateExpression="set cost = :cost",
+            ExpressionAttributeValues={
+                ':cost': {'uioRentalPeriod': i['uioRentalPeriod'],
+                          'uimRentalPayDate': i['uimRentalPayDate'],
+                          'uioRentalAmount': i['uioRentalAmount'],
+                          'uimEmployeePayDate': i['uimEmployeePayDate'],
+                          'uioEmployeeNumber': i['uioEmployeeNumber'],
+                          'uioEmployeeAmount': i['uioEmployeeAmount'],
+                          'uioOtherCostDueDate': i['uioOtherCostDueDate'],
+                          'uioOtherCost': i['uioOtherCost']}
+            }
+        )
+        ret.append(i['userMonthlyId'][:-6])
+
+    return jsonify({'listOfUser':ret})
+
+
+# user_table 에서 cost 가져오기
+def get_monthly_cost(userId):
+    user_table = dynamodb.Table(USERS_TABLE)
+
+    resp = user_table.get_item(
+        Key={'userId':userId}
+    )
+
+    item = resp.get('Item')
+    if not item or not item['cost']:
+        return False
+
+    cost = item['cost']
+
+    return {'uioRentalPeriod': cost['uioRentalPeriod'],
+            'uimRentalPayDate': cost['uimRentalPayDate'],
+            'uioRentalAmount': cost['uioRentalAmount'],
+            'uimEmployeePayDate': cost['uimEmployeePayDate'],
+            'uioEmployeeNumber': cost['uioEmployeeNumber'],
+            'uioEmployeeAmount': cost['uioEmployeeAmount'],
+            'uioOtherCostDueDate': cost['uioOtherCostDueDate'],
+            'uioOtherCost': cost['uioOtherCost']}
+
+
+# 일주일 전 데이터 조회
+@app.route("/weekly/previous/<string:userId>")
+def get_previous_weekly_report(userId):
+
+    daily_table = dynamodb.Table(DAILY_TABLE)
+
+    dates = []
+
+    for x in range(7):
+        dates.append((datetime.now() - timedelta(days=(7 - x))).strftime('%Y%m%d'))
+
+    fe = Key('userDailyId').between(userId + dates[0], userId + dates[6])
+    response = daily_table.scan(
+        FilterExpression=fe,
+    )
+
+    temp = {}
+
+    for i in response['Items']:
+        logger.debug(i)
+        temp[i['userDailyId']] = [i['uimDailySales'], i['uimDailyBuying']]
+
+    message_header = " Sales report of previous 7days\n" + add_postfix_date_month(dates[0]) + ' ~ ' \
+                     + add_postfix_date_month(dates[6]) + '\n\n'
+    message_body = 'Date|Sales|Buying|Profit\n'
+
+    for y in dates:
+
+        if (userId + y) in temp:
+            z = temp[userId + y]
+            message_body = '%s |%6d | %6d | %6d' % (add_postfix_date_month(y), z[0], z[1], (z[0] - z[1]))
+        else:
+            message_body = message_body + add_postfix_date_month(y) + '|' + "    -|    -|    -"
+
+        message_body = message_body + '\n'
+
+    return jsonify({
+        "messages": [{"text": message_header + message_body }]
+    })
+
+
+# get_montly_cost(user table 의 cost)
+def get_monthly_report(userId, now):
 
     today = now.strftime('%Y%m%d')
     this_month = now.strftime(('%Y%m'))
@@ -1426,20 +1655,13 @@ def get_montly_report(userId, now):
     message = message + '\n' + this_month_text + '\n' + \
               ' :%6d | %6d | %6d'%(total_sales, total_buying, (total_sales - total_buying)) + \
               '\n\nNet Profit\n= Profit - Monthly Cost\n\n'
-    monthly_table = dynamodb.Table(MONTHLY_TABLE)
 
-    fe = Key('userMonthlyId').eq(userId + this_month)
-    res = monthly_table.scan(
-        FilterExpression=fe,
-    )
-
-    logger.debug(res)
-
-    item_monthly = res.get('Items')
+    item_monthly = get_monthly_cost(userId)
     if not item_monthly:
         total_cost = 0
     else:
-        total_cost = item_monthly[0].get('uioRentalAmount') + item_monthly[0].get('uioEmployeeAmount') + item_monthly[0].get('uioOtherCost')
+        total_cost = int(item_monthly['uioRentalAmount']) + int(item_monthly['uioEmployeeAmount'])\
+                     + int(item_monthly['uioOtherCost'])
 
     message = message + '%drs\n= %d - %d'%((total_sales - total_buying - total_cost),(total_sales - total_buying), total_cost )
 
@@ -1447,105 +1669,24 @@ def get_montly_report(userId, now):
 
     return message
 
-@app.route("/daily/<string:update_date>", methods=['POST'])
-def update_daily(update_date):
-    userId = request.form['messenger user id']
-    if not userId:
-        return jsonify({'error': 'Please provider userId'}), 400
 
-    uimDailySales = request.form['uimDailySales']
-    uimDailyBuying = request.form['uimDailyBuying']
-
-    logger.info('daily_input|' + userId + '|' + uimDailySales + '|' + uimDailyBuying)
-
-    put_daily(userId, uimDailySales, uimDailyBuying, datetime.strptime(update_date,'%Y%m%d'))
-
-    # 일입력 체크
-    update_dailyInputCheck(userId, True)
-
-    return jsonify({})
-
-# noti update
-@app.route("/noti/<string:userId>", methods=['POST'])
-def put_noti(userId):
+def update_cost(userId, uioRentalPeriod, uimRentalPayDate, uioOtherCostDueDate, uimEmployeePayDate,
+                        uioRentalAmount, uioEmployeeNumber, uioEmployeeAmount, uioOtherCost):
 
     user_table = dynamodb.Table(USERS_TABLE)
-
-    resp = user_table.get_item(
-        Key={'userId':userId}
-    )
-    logger.info(resp)
-
-    uioNotiSales = request.form['uioNotiSales']
-    uioNotiLedger = request.form['uioNotiLedger']
-
-    item = resp.get('Item')
-    if not item:
-        return jsonify({})
-
     resp = user_table.update_item(
-        Key = {
-            'userId':userId
+        Key={
+            'userId': userId
         },
-        UpdateExpression = "set noti = :noti, created_at= :created_at",
+        UpdateExpression="set cost = :cost",
         ExpressionAttributeValues={
-            ':noti': {'uioNotiSales':uioNotiSales, 'uioNotiLedger': uioNotiLedger},
-            ':created_at': datetime.utcnow().isoformat()
+            ':cost': {'uioRentalPeriod': uioRentalPeriod,
+                      'uimRentalPayDate': uimRentalPayDate,
+                      'uioRentalAmount': uioRentalAmount,
+                      'uimEmployeePayDate': uimEmployeePayDate,
+                      'uioEmployeeNumber': uioEmployeeNumber,
+                      'uioEmployeeAmount': uioEmployeeAmount,
+                      'uioOtherCostDueDate': uioOtherCostDueDate,
+                      'uioOtherCost': uioOtherCost}
         }
     )
-
-    return jsonify({})
-
-
-@app.route("/noti/ledger/broadcast", methods=['GET'])
-def broadcast_ledger_noti():
-    hour = datetime.now(istTimeZone).strftime('%H')
-    logger.debug(hour)
-    user_table = dynamodb.Table(USERS_TABLE)
-
-    fe = Attr('noti.uioNotiLedger').eq(hour)
-    resp = user_table.scan(
-        FilterExpression=fe,
-    )
-
-    logger.debug(resp)
-
-    items = resp.get('Items')
-    if not items:
-        return jsonify({})
-
-    ret = []
-
-    for i in items:
-        logger.debug(i['userId'])
-        send_message(i['userId'], 'ListofLedger', {})
-        ret.append(i['userId'])
-
-    return jsonify({'listOfUser':ret})
-
-
-@app.route("/noti/sales/broadcast", methods=['GET'])
-def broadcast_sales_noti():
-    hour = datetime.now(istTimeZone).strftime('%H')
-    logger.debug(hour)
-    user_table = dynamodb.Table(USERS_TABLE)
-
-    fe = Attr('noti.uioNotiSales').eq(hour)
-    resp = user_table.scan(
-        FilterExpression=fe,
-    )
-
-    logger.debug(resp)
-
-    items = resp.get('Items')
-    if not items:
-        return jsonify({})
-
-    ret = []
-
-    for i in items:
-        logger.debug(i['userId'])
-        send_message(i['userId'], 'DailyInput_BR', {})
-        ret.append(i['userId'])
-
-    return jsonify({'listOfUser':ret})
