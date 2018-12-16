@@ -923,16 +923,16 @@ def get_weather(userId):
 
 
     # AQI
-    aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
-    try:
-        responseAqi = requests.get(aqiUrl, verify=True)
-    except HTTPError as e:
-        logger.error("AQI Request failed: %d %s", e.code, e.reason)
-    except URLError as e:
-        logger.error("AQI Server connection failed: %s", e.reason)
+    #aqiUrl = 'https://api.breezometer.com/air-quality/v2/current-conditions?lat=28.451850&lon=77.08684&key=7740b958325645ad999516d78f9072de&features=local_aqi'
+    #try:
+    #    responseAqi = requests.get(aqiUrl, verify=True)
+    #except HTTPError as e:
+    #    logger.error("AQI Request failed: %d %s", e.code, e.reason)
+    #except URLError as e:
+    #    logger.error("AQI Server connection failed: %s", e.reason)
 
-    aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
-    aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
+    #aqi = responseAqi.json()['data']['indexes']['ind_cpcb']['aqi']
+    #aqiCategory = responseAqi.json()['data']['indexes']['ind_cpcb']['category']
 
     jsonify(response.json()['query']['results']['channel']['item']['forecast'][0])
     forecast = response.json()['query']['results']['channel']['item']['forecast']
@@ -952,8 +952,8 @@ def get_weather(userId):
             "weatherDate3": forecast[2]['date'],
             "weatherDay3High": forecast[2]['high'],
             "weatherDay3Low": forecast[2]['low'],
-            "weatherDay3Text": forecast[2]['text'],
-            "aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date_month(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
+            "weatherDay3Text": forecast[2]['text']
+            #"aqiValue": "AQI " + str(aqi) + " on " + add_postfix_date_month(datetime.now(istTimeZone).strftime('%Y%m%d')) + " " + datetime.now(istTimeZone).strftime('%I%p') + "\n: " + aqiCategory
         }
     }
 
