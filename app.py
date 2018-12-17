@@ -1525,7 +1525,7 @@ def get_monthly_cost(userId):
     )
 
     item = resp.get('Item')
-    if not item or not item['cost']:
+    if not item or 'cost' not in item.keys():
         return False
 
     cost = item['cost']
